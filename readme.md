@@ -30,20 +30,19 @@ LLVM,OCaml,OMakeが必要ですのでgoogleで検索するなどしてインス�
 
 ## 目次
 
-- [a01/readme.md](LLVM IRとllc)
-- [l01/readme.md](足し算と引き算)
-- [l02/readme.md](k正規化)
-- [l03/readme.md](パーサ)
-- [l04/readme.md](型推論)
-- [l05/readme.md](関数)
-- [l06/readme.md](ファイルの分割)
-- [l07/readme.md](クロージャ)
-- [l08/readme.md](BoolとIf)
-- [l09/readme.md](配列)
-- [l10/readme.md](多値)
-- [l11/readme.md](Float)
-- [l12/readme.md](末尾再帰最適化)
-
+- [LLVM IRとllc](a01/readme.md)
+- [足し算と引き算](l01/readme.md)
+- [k正規化](l02/readme.md)
+- [パーサ](l03/readme.md)
+- [型推論](l04/readme.md)
+- [関数](l05/readme.md)
+- [ファイルの分割](l06/readme.md)
+- [クロージャ](l07/readme.md)
+- [BoolとIf](l08/readme.md)
+- [配列](l09/readme.md)
+- [多値](l10/readme.md)
+- [Float](l11/readme.md)
+- [末尾再帰最適化](l12/readme.md)
 
 ## ライセンス
 
