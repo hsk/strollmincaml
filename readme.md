@@ -54,7 +54,9 @@ LLVM,OCaml,OMakeが必要ですのでgoogleで検索するなどしてインス�
 http://esumii.github.io/min-caml/ (オリジナルのmin-camlのWebページ)
 
 https://github.com/nojb/llvm-min-caml (LLVMライブラリを使った実装 GC装備+小さなemitter)
+
 https://github.com/mzp/min-caml (LLVMライブラリの実装)
+
 https://github.com/kmacy/llmincaml
 
 http://llvm.org/docs/LangRef.html (LLVMのリファレンス)
