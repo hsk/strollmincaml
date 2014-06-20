@@ -210,7 +210,7 @@ let rec visit(env:r M.t)(c: Closure.t): r =
         | Type.Array(Type.Unit) -> RN(Type.Unit, "0")
         | Type.Array(t)  ->
 
-          let reg4 = RL(t, genid("..")) in
+          let reg4 = RL(Type.Array(t), genid("..")) in
           add(Field(reg4, xr, M.find y env));
           let reg5 = M.find z env in
           add(Store(reg5, reg4));

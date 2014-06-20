@@ -94,7 +94,7 @@ let _ =
       else fib (n - 1) + fib (n - 2)
     in print(fib 30)
   ", "(832040\n,,0)");
-  test("let a = Array.create 2 112 in print(a.(1));print(a.(0))","(112\n112\n,,0)");
+  test("let a = Array.create 2 112 in print(a.(1));a.(0)<-2;print(a.(0))","(112\n2\n,,0)");
   test("let a = (1,2) in let (b,c) = a in print(b); print(c)", "(1\n2\n,,0)");
   test("let a = (1.1,2) in let (b,c) = a in let d = b+.2.1-.0.1*.2.0/.1.2 in print(c)","(2\n,,0)");
   test("let a = (-. 1.1,2) in let (b,c) = a in let d = b+.2.1-.0.1*.2.0/.1.2 in print(c)","(2\n,,0)");

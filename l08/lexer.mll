@@ -54,8 +54,6 @@ rule token = parse
     { THEN }
 | "else"
     { ELSE }
-| ','
-    { COMMA }
 | '_'
     { IDENT(Utils.genid("..")) }
 | lower (digit|lower|upper|'_')* 

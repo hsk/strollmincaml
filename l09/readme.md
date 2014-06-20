@@ -7,7 +7,7 @@ MinCamlの配列は配列のポインタを持って回る形式になってい�
 テストを追加します:
 
 ```
-  test("let a = Array.create 2 112 in print(a.(1));print(a.(0))","(112\n112\n,,0)");
+  test("let a = Array.create 2 112 in print(a.(1));a.(0)<-2;print(a.(0))","(112\n2\n,,0)");
 ```
 
 Array.createで作成し、a.(1)等でアクセスします。
@@ -17,7 +17,7 @@ Array.createで作成し、a.(1)等でアクセスします。
 ソースを書き換えます。
 
 ```
-  let src = "let a = Array.create 2 112 in print(a.(1));print(a.(0))" in
+  let src = "let a = Array.create 2 112 in print(a.(1));a.(0)<-2;print(a.(0))" in
 ```
 
 ## type.ml
@@ -263,7 +263,7 @@ visitに以下を追加します:
         | Type.Array(Type.Unit) -> RN(Type.Unit, "0")
         | Type.Array(t)  ->
 
-          let reg4 = RL(t, genid("..")) in
+          let reg4 = RL(Type.Array(t), genid("..")) in
           add(Field(reg4, xr, M.find y env));
           let reg5 = M.find z env in
           add(Store(reg5, reg4));

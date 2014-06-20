@@ -94,7 +94,7 @@ let _ =
       else fib (n - 1) + fib (n - 2)
     in print(fib 30)
   ", "(832040\n,,0)");
-  test("let a = Array.create 2 112 in print(a.(1));print(a.(0))","(112\n112\n,,0)");
+  test("let a = Array.create 2 112 in print(a.(1));a.(0)<-2;print(a.(0))","(112\n2\n,,0)");
 
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)
 

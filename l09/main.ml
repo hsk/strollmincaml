@@ -10,7 +10,7 @@ let parse src =
   Parser.exp Lexer.token lexbuf
 
 let _ =
-  let src = "let a = Array.create 2 112 in print(a.(1));print(a.(0))" in
+  let src = "let a = Array.create 2 112 in print(a.(1));a.(0)<-2;print(a.(0))" in
   let ast = parse src in
   fprintf std_formatter "ast=%a@." Syntax.print_t ast;
   let ast = Typing.apply(ast) in
