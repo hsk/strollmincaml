@@ -6,22 +6,12 @@ type r =
   | RN of Type.t * string
   | RG of Type.t * string
 
-let regid = function
-  | RL (_,id) -> id
-  | RN (_,id) -> id
-  | RG (_,id) -> id
-
-let regt = function
-  | RL (t,_) -> t
-  | RN (t,_) -> t
-  | RG (t,_) -> t
-
 type t =
-  | Bin of r * string * r * r
   | Call of bool * r * r * r list
+  | Bin of r * string * r * r
+  | Ret of r
   | InsertValue of r * r * r * int
   | ExtractValue of r * r * int
-  | Ret of r
   (* 条件分岐 *)
   | Jne of r * string * string * string
   (* ジャンプ命令 *)
@@ -39,6 +29,16 @@ type fundef =
 
 type prog = Prog of fundef list
 
+let regid = function
+  | RL (_,id) -> id
+  | RN (_,id) -> id
+  | RG (_,id) -> id
+
+let regt = function
+  | RL (t,_) -> t
+  | RN (t,_) -> t
+  | RG (t,_) -> t
+
 let vs :t list ref = ref []
 
 let add (v:t): unit =
@@ -50,7 +50,7 @@ let bin env op x y =
   add(Bin(r, op, rx, M.find y env));
   r
 
-let rec visit(env:r M.t)(c: Closure.t): r =
+let rec visit (env)(c: Closure.t): r =
   match c with
     | Closure.Int(i) ->
       RN(Type.Int, string_of_int i)
@@ -116,7 +116,6 @@ let rec visit(env:r M.t)(c: Closure.t): r =
       let retR = RL(t, genid("..")) in
       add(Call(false, retR, nameR, prmRs));
       retR
-
     (* クロージャ生成 *)
     | Closure.MakeCls(
       (nameId, Type.Fun(funParamTs, funRetT)),
@@ -150,9 +149,9 @@ let rec visit(env:r M.t)(c: Closure.t): r =
 
     | Closure.MakeCls(_, _, _) -> assert false
 
-    (* クロージャ実行 *)
     | Closure.AppCls(nameId, prmIds) ->
       app_cls env false nameId prmIds
+
     | Closure.Get(x, y) ->
       let xr = M.find x env in
       let xt = regt xr in
@@ -205,61 +204,62 @@ let rec visit(env:r M.t)(c: Closure.t): r =
       in r
 
 and app_dir env tail nameId prmIds =
-  try
-    let prmRs = List.map (fun prmId -> M.find prmId env ) prmIds in
-    let nameR = M.find nameId env in
-    let retR = RL(regt nameR, genid("..")) in
-    add(Call(tail, retR, nameR, prmRs));
-    retR
-  with
-    Not_found ->
-      failwith ("not found appdir "^ nameId)
-
+      (try
+        let prmRs = List.map (fun prmId -> M.find prmId env ) prmIds in
+        let nameR = M.find nameId env in
+        let retR = RL(regt nameR, genid("..")) in
+        add(Call(tail, retR, nameR, prmRs));
+        retR
+      with
+        Not_found ->
+          failwith ("not found appdir "^ nameId)
+      )
 and app_cls env tail closureId prmIds =
-  let funPrmRs = List.map
-    (fun prmId -> M.find prmId env )
-    prmIds
-  in
-  let closureR = M.find closureId env in
-
-  let (funR, closurePrmRs, retT) =
-    match regt closureR with
-    | Type.Tuple((Type.Fun(_, retT) as funT)::prmTs) -> 
-      let funR = RL(funT, genid("..")) in
-      add(ExtractValue(funR, closureR, 0));
-      let (closurePrmRs,_) = List.fold_left
-        ( fun (closurePrmRs, closureIndex) closurePrmT ->
-          let closurePrmR = RL(closurePrmT, genid("..")) in
-          add(ExtractValue(closurePrmR, closureR, closureIndex));
-          (closurePrmR::closurePrmRs, closureIndex + 1)
-        )
-        ([],1)
-        prmTs
+    (* クロージャ実行 *)
+      let funPrmRs = List.map
+        (fun prmId -> M.find prmId env )
+        prmIds
       in
-      (funR, List.rev closurePrmRs, retT)
-    | _ ->
-      fprintf str_formatter "error id=%s t=%a" closureId Type.print_t (regt closureR);
-      failwith(flush_str_formatter())
-  in
+      let closureR = M.find closureId env in
 
-  let retR = RL(retT, genid("..")) in
-  add(Call(tail, retR, funR, closurePrmRs @ funPrmRs));
-  retR
+      let (funR, closurePrmRs, retT) =
+        match regt closureR with
+        | Type.Tuple((Type.Fun(_, retT) as funT)::prmTs) -> 
+          let funR = RL(funT, genid("..")) in
+          add(ExtractValue(funR, closureR, 0));
+          let (closurePrmRs,_) = List.fold_left
+            ( fun (closurePrmRs, closureIndex) closurePrmT ->
+              let closurePrmR = RL(closurePrmT, genid("..")) in
+              add(ExtractValue(closurePrmR, closureR, closureIndex));
+              (closurePrmR::closurePrmRs, closureIndex + 1)
+            )
+            ([],1)
+            prmTs
+          in
+          (funR, List.rev closurePrmRs, retT)
+        | _ ->
+          fprintf str_formatter "error id=%s t=%a" closureId Type.print_t (regt closureR);
+          failwith(flush_str_formatter())
+      in
+
+      let retR = RL(retT, genid("..")) in
+      add(Call(tail, retR, funR, closurePrmRs @ funPrmRs));
+      retR
 
 and let_tuple env tail atl a =
-  let ar = M.find a env in
-  let (env,_ ) = List.fold_left
-    (fun (env,i) (id1,t) ->
-      let r = RL(t,id1) in
-      add(ExtractValue(r, ar, i));
-      (M.add id1 r env, i+1)
-    )
-    (env, 0)
-    atl
-  in
-  env
+        let ar = M.find a env in
+        let (env,_ ) = List.fold_left
+          (fun (env,i) (id1,t) ->
+            let r = RL(t,id1) in
+            add(ExtractValue(r, ar, i));
+            (M.add id1 r env, i+1)
+          )
+          (env, 0)
+          atl
+        in
+        env
 
-and visit_tail env e =
+let rec visit_tail env e =
   match e with
   | Closure.If(x, e1, e2) ->
     let id1 = genid("ok") in
@@ -280,13 +280,6 @@ and visit_tail env e =
     let retR = app_dir env true nameId prmIds in
     add(Ret(retR));
     retR
-  | Closure.ExtFunApp(nameId, prmIds, t) ->
-    let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
-    let nameR = RG(t, nameId) in
-    let retR = RL(t, genid("..")) in
-    add(Call(true, retR, nameR, prmRs));
-    add(Ret(retR));
-    retR
   (* クロージャ実行 *)
   | Closure.AppCls(nameId, prmIds) ->
     let retR = app_cls env true nameId prmIds in
@@ -301,10 +294,10 @@ and visit_tail env e =
     v
 
 let visitfun env {
-    Closure.name = (x, t); 
-    Closure.args = yts;
-    Closure.formal_fv = zts;
-    Closure.body = e } =
+  Closure.name = (x, t); 
+  Closure.args = yts;
+  Closure.formal_fv = zts;
+  Closure.body = e } =
   vs := [];
   match t with
   | Type.Fun(_, t) ->
@@ -318,18 +311,13 @@ let visitfun env {
 let apply (Closure.Prog(fundefs, e)): prog =
   let fundefs = fundefs @ [{Closure.name=("main", Type.Fun([], Type.Unit));
     Closure.args=[]; Closure.formal_fv=[]; Closure.body= e}] in
-  let env = M.add
-    "create_array"
-    (RG(Type.Fun([Type.Int;Type.Int],Type.Array(Type.Int)),"create_array"))
-    M.empty
-  in
   let (_,fundefs) =
     List.fold_left
-      (fun  (env, fundefs) fundef ->
+      (fun (env, fundefs) fundef ->
         let (env, fundef) = visitfun env fundef in
         (env, fundef::fundefs)
       )
-      (env, [])
+      (M.empty, [])
       fundefs
   in
   Prog(fundefs)

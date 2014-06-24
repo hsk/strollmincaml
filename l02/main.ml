@@ -19,7 +19,7 @@ module KNormal = struct
     | Print of string
     | Let of string * t * t
 
-  let rec visit (e:Syntax.t):t =
+  let rec visit (e:Syntax.t): t =
     match e with
       | Syntax.Int(i) -> Int(i)
       | Syntax.Add(aE, bE) ->
@@ -52,13 +52,13 @@ module Virtual = struct
     | RL of string
     | RN of string
 
-  let regid = function
-    | RL id -> id
-    | RN id -> id
-
   type t =
     | Print of r
     | Bin of r * string * r * r
+
+  let regid = function
+    | RL id -> id
+    | RN id -> id
 
   let vs :t list ref = ref []
 
@@ -81,7 +81,7 @@ module Virtual = struct
         visit (M.add aId aR env) bK
       | KNormal.Print(aId) ->
         add(Print(M.find aId env));
-        RN("void")
+        RN("0")
 
   let apply (k: KNormal.t): t list =
     vs := [];
@@ -133,6 +133,11 @@ let print_exec cmd =
   match exec cmd with
   | (a,b,c) -> fprintf std_formatter "(%s,%s,%s)@." a b c
 
+let compile output ast =
+  let k = KNormal.apply(ast) in
+  let vs = Virtual.apply(k) in
+  Emit.apply output vs
+
 open Syntax
 
 let _ =
@@ -142,9 +147,7 @@ let _ =
       Let(
         Print(Add(Int(2), Int(3))),
         Print(Sub(Add(Int(2), Int(3)), Int(2))))) in
-  let k = KNormal.apply(ast) in
-  let vs = Virtual.apply(k) in
-  Emit.apply "a.ll" vs;
+  compile "a.ll" ast;
   print_exec("llc a.ll -o a.s");
   print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")

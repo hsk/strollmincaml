@@ -6,6 +6,18 @@ type r =
   | RN of Type.t * string
   | RG of Type.t * string
 
+type t =
+  | Call of r * r * r list
+  | Bin of r * string * r * r
+  | Ret of r
+  | InsertValue of r * r * r * int
+  | ExtractValue of r * r * int
+
+type fundef =
+   {name : string; args : (string * Type.t) list; body : t list; ret : Type.t}
+
+type prog = Prog of fundef list
+
 let regid = function
   | RL (_,id) -> id
   | RN (_,id) -> id
@@ -15,18 +27,6 @@ let regt = function
   | RL (t,_) -> t
   | RN (t,_) -> t
   | RG (t,_) -> t
-
-type t =
-  | Bin of r * string * r * r
-  | Call of r * r * r list
-  | InsertValue of r * r * r * int
-  | ExtractValue of r * r * int
-  | Ret of r
-
-type fundef =
-   {name : string; args : (string * Type.t) list; body : t list; ret : Type.t}
-
-type prog = Prog of fundef list
 
 let vs :t list ref = ref []
 
@@ -39,7 +39,7 @@ let bin env op x y =
   add(Bin(r, op, rx, M.find y env));
   r
 
-let rec visit(env:r M.t)(c: Closure.t): r =
+let rec visit (env)(c: Closure.t): r =
   match c with
     | Closure.Int(i) ->
       RN(Type.Int, string_of_int i)
@@ -73,7 +73,6 @@ let rec visit(env:r M.t)(c: Closure.t): r =
       let retR = RL(t, genid("..")) in
       add(Call(retR, nameR, prmRs));
       retR
-
     (* クロージャ生成 *)
     | Closure.MakeCls(
       (nameId, Type.Fun(funParamTs, funRetT)),
@@ -140,10 +139,10 @@ let rec visit(env:r M.t)(c: Closure.t): r =
       retR
 
 let visitfun env {
-    Closure.name = (x, t); 
-    Closure.args = yts;
-    Closure.formal_fv = zts;
-    Closure.body = e } =
+  Closure.name = (x, t); 
+  Closure.args = yts;
+  Closure.formal_fv = zts;
+  Closure.body = e } =
   vs := [];
   match t with
   | Type.Fun(_, t) ->
@@ -160,7 +159,7 @@ let apply (Closure.Prog(fundefs, e)): prog =
     Closure.args=[]; Closure.formal_fv=[]; Closure.body= e}] in
   let (_,fundefs) =
     List.fold_left
-      (fun  (env, fundefs) fundef ->
+      (fun (env, fundefs) fundef ->
         let (env, fundef) = visitfun env fundef in
         (env, fundef::fundefs)
       )

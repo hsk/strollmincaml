@@ -1,10 +1,11 @@
 type t = (* MinCamlの型を表現するデータ型 (caml2html: type_t) *)
   | Unit
   | Int
+  | Bool
   | Var of t option ref
   | Fun of t list * t (* arguments are uncurried *)
   | Tuple of t list
-  | Bool
+  
 let gentyp () = Var(ref None) (* 新しい型変数を作る *)
 
 open Format
@@ -19,11 +20,9 @@ let rec prints f ppf ls =
 let rec print_t ppf = function
   | Unit -> fprintf ppf "Unit@?"
   | Int -> fprintf ppf "Int@?"
+  | Bool -> fprintf ppf "Bool@?"
   | Var({contents=None}) -> fprintf ppf "Var(ref None)@?"
   | Var({contents=Some t}) -> fprintf ppf "Var(ref (Some(%a)))@?" print_t t
   | Fun(ts,t) -> fprintf ppf "Fun(%a,%a)@?" print_ts ts print_t t
   | Tuple(ts) -> fprintf ppf "Tuple(%a)@?" print_ts ts
-  | Bool -> fprintf ppf "Bool@?"
 and print_ts ppf ts = prints print_t ppf ts
-
-

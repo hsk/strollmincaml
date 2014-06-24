@@ -18,8 +18,6 @@ module Typing = struct
    *)
   let rec deref_type(x:Type.t):Type.t =
     match x with
-      | Type.Fun(t1s, t2) ->
-        Type.Fun(List.map deref_type t1s, deref_type t2)
       | Type.Var({contents=None} as r) ->
         r := Some(Type.Int);
         Type.Int
@@ -27,6 +25,8 @@ module Typing = struct
         let t1 = deref_type(t) in
         r := Some(t1);
         t1
+      | Type.Fun(t1s, t2) ->
+        Type.Fun(List.map deref_type t1s, deref_type t2)
       | t -> t
 
   (**
@@ -56,10 +56,10 @@ module Typing = struct
     (* 出現チェック *)
     let rec occur(r1:Type.t option ref)(r2:Type.t):bool =
       match r2 with
-      | Type.Fun(t2s, t2) -> List.exists (occur r1) t2s || occur r1 t2
       | Type.Var(r2) when (r1 == r2) -> true
       | Type.Var({contents=None}) -> false
       | Type.Var({contents=Some(t2)}) -> occur r1 t2
+      | Type.Fun(t2s, t2) -> List.exists (occur r1) t2s || occur r1 t2
       | _ -> false
     in
 
@@ -284,6 +284,16 @@ module Virtual = struct
     | RN of Type.t * string
     | RG of Type.t * string
 
+  type t =
+    | Call of r * r * r list
+    | Bin of r * string * r * r
+    | Ret of r
+
+  type fundef =
+     {name : string; args : (string * Type.t) list; body : t list; ret : Type.t}
+
+  type prog = Prog of fundef list
+
   let regid = function
     | RL (_,id) -> id
     | RN (_,id) -> id
@@ -293,16 +303,6 @@ module Virtual = struct
     | RL (t,_) -> t
     | RN (t,_) -> t
     | RG (t,_) -> t
-
-  type t =
-    | Bin of r * string * r * r
-    | Call of r * r * r list
-    | Ret of r
-
-  type fundef =
-     {name : string; args : (string * Type.t) list; body : t list; ret : Type.t}
-
-  type prog = Prog of fundef list
 
   let vs :t list ref = ref []
 
@@ -314,8 +314,8 @@ module Virtual = struct
     let r = RL(regt rx, genid("..")) in
     add(Bin(r, op, rx, M.find y env));
     r
-
-  let rec visit(env:r M.t)(c: Closure.t): r =
+  
+  let rec visit (env)(c: Closure.t): r =
     match c with
       | Closure.Int(i) ->
         RN(Type.Int, string_of_int i)
@@ -324,7 +324,7 @@ module Virtual = struct
       | Closure.Let((aId,aT), bK, cK) ->
         let bR = visit env bK in
         visit (M.add aId bR env) (cK)
-      | Closure.Unit -> RN(Type.Unit, "void")
+      | Closure.Unit -> RN(Type.Unit, "0")
       | Closure.Var a ->
         M.find a env
       | Closure.AppDir(nameId, prmIds) ->
@@ -344,9 +344,10 @@ module Virtual = struct
       Closure.name = (x, t); 
       Closure.args = yts;
       Closure.body = e } =
-    vs := [];
+
     match t with
     | Type.Fun(_, t) ->
+      vs := [];
       let env = M.add x (RG(t,x)) env in
       let env' = M.add_list (List.map (fun (s,t) -> (s, RL(t,s))) yts) env in
       let r = visit env' e in
@@ -359,7 +360,7 @@ module Virtual = struct
       Closure.args=[]; Closure.body= e}] in
     let (_,fundefs) =
       List.fold_left
-        (fun  (env, fundefs) fundef ->
+        (fun (env, fundefs) fundef ->
           let (env, fundef) = visitfun env fundef in
           (env, fundef::fundefs)
         )
@@ -377,8 +378,8 @@ module Emit = struct
   let p(r:r): string =
     match r with
       | RL(_,id) -> "%" ^ id
-      | RG(_,id) -> "@" ^ id
       | RN(_,id) -> id
+      | RG(_,id) -> "@" ^ id
 
   let rec pt(t:Type.t): string =
     match t with
@@ -430,7 +431,6 @@ module Emit = struct
 
     ) fundefs;
 
-
     asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
     asm("define i64 @print(i64 %a) nounwind ssp {");
     asm("entry:");
@@ -453,8 +453,7 @@ let parse src =
   let lexbuf = Lexing.from_string src in
   Parser.exp Lexer.token lexbuf
 
-let _ =
-  let src = "let rec f x = x+1 in print (f 1); print (2 + 3);print ((2+3)-2); let a = 1+2 in print a" in
+let compile output src =
   let ast = parse src in
   fprintf std_formatter "ast=%a@." Syntax.print_t ast;
   let ast = Typing.apply(ast) in
@@ -465,8 +464,12 @@ let _ =
   fprintf std_formatter "closure ok@.";
   let v = Virtual.apply(c) in
   fprintf std_formatter "virtual ok@.";
-  Emit.apply "a.ll" v;
-  fprintf std_formatter "emit ok@.";
+  Emit.apply output v;
+  fprintf std_formatter "emit ok@."
+
+let _ =
+  let src = "let rec f x = x+1 in print (f 1); print (2 + 3);print ((2+3)-2); let a = 1+2 in print a" in
+  compile "a.ll" src;
   print_exec("llc a.ll -o a.s");
   print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")

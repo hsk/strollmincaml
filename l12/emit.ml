@@ -4,18 +4,18 @@ open Virtual
 let p(r:r): string =
   match r with
     | RL(_,id) -> "%" ^ id
-    | RG(_,id) -> "@" ^ id
     | RN(_,id) -> id
+    | RG(_,id) -> "@" ^ id
 
 let rec pt(t:Type.t): string =
   match t with
-  | Type.Bool -> "i1"
   | Type.Int -> "i64"
   | Type.Float -> "double"
+  | Type.Bool -> "i1"
   | Type.Unit -> "i64"
   | Type.Fun(ts,t) -> pt t ^ "(" ^ String.concat ", " (List.map pt ts) ^ ")*"
-  | Type.Tuple(ts) -> "{" ^ String.concat ", " (List.map pt ts) ^ "}"
   | Type.Array(t) -> pt t ^ "*"
+  | Type.Tuple(ts) -> "{" ^ String.concat ", " (List.map pt ts) ^ "}"
   | Type.Var _ -> assert false
 
 let ptr(r:r): string =
@@ -27,12 +27,9 @@ let ptr(r:r): string =
 let pr(r:r): string =
   ptr r ^ " " ^ p r
 
-let decls:string M.t ref = ref M.empty
-
 let emit(v: t) =
   match v with
     | Bin(id, op, a, b) ->
-
       (match op with
       | "eq" | "ne" ->
           let reg1 = RL(Type.Bool,genid("..")) in
@@ -53,17 +50,7 @@ let emit(v: t) =
           asm_p(tail ^ "call " ^ pr(r) ^ "(" ^ ps ^ ") nounwind ssp")
         | _ ->
           asm_p(p(id) ^ " = " ^ tail ^ "call " ^ pr(r) ^ "(" ^ ps ^ ") nounwind ssp")
-      );
-      (match r with
-      | RG(_,id) when not(M.mem id !decls) ->
-        let ps = String.concat ", " (List.map ptr prms) in
-        decls := M.add id ("declare "^pr r^"("^ps^  ")") !decls
-      | _-> ()
       )
-    | InsertValue(r1, r2, r3, i) ->
-      asm_p(p(r1) ^ " = insertvalue " ^ pr(r2) ^ ", " ^ pr(r3) ^ ", " ^ string_of_int i)
-    | ExtractValue(r1, r2, i) ->
-      asm_p(p(r1) ^ " = extractvalue " ^ pr(r2) ^ ", " ^ string_of_int i)
     | Ret(a) ->
       (match regt a with
         | Type.Unit ->
@@ -71,23 +58,23 @@ let emit(v: t) =
         | _ ->
           asm_p("ret " ^ pr(a))
       )
+    | InsertValue(r1, r2, r3, i) ->
+      asm_p(p(r1) ^ " = insertvalue " ^ pr(r2) ^ ", " ^ pr(r3) ^ ", " ^ string_of_int i)
+    | ExtractValue(r1, r2, i) ->
+      asm_p(p(r1) ^ " = extractvalue " ^ pr(r2) ^ ", " ^ string_of_int i)
     | Jne(r, label, jmp1, jmp2) ->
       let reg = genid("%reg_") in
       asm_p(reg ^ " = icmp ne " ^ ptr(r) ^ " " ^ p(r) ^ ", 0");
       asm_p("br i1 " ^ reg ^ ", label %" ^ jmp1 ^ ", label %" ^ jmp2);
       asm(label ^ ":")
-
     | Goto(label, jmp) ->
       asm_p("br label %" ^ jmp);
       if (label <> "") then asm(label ^ ":") else ()
-
     | Label(jmp, label) ->
       if (jmp <> "") then asm_p("br label %" ^ jmp) else ();
       asm(label ^ ":")
-
     | Phi(r, l1, l2, t, r1, r2) ->
       asm_p(p(r) ^ " = phi " ^ pt(t) ^ " [" ^ p(r1) ^ ", %" ^ l1 ^ "], [" ^ p(r2) ^ ", %" ^ l2 ^ "]")
-
     | Load(reg1, reg2) ->
       asm_p(p(reg1) ^ " = load " ^ pr(reg2))
     | Store(reg1, reg2) ->
@@ -97,10 +84,9 @@ let emit(v: t) =
 
 let apply(file: string) (Prog(fundefs)):unit =
   asm_open(file);
-  decls := M.add_list[("print", "");("create_array", "")] M.empty;
+
   List.iter (fun
     {name = x; args = args; body = vs; ret = t} ->
-    decls := M.add x "" !decls;
     let args = String.concat ", " (List.map (fun (s,t)-> pt t ^ " %" ^ s) args) in
     asm("define "^pt t^" @"^x^"("^args^") nounwind ssp {");
     asm("entry:");
@@ -108,7 +94,6 @@ let apply(file: string) (Prog(fundefs)):unit =
     asm("}");
 
   ) fundefs;
-
 
   asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
   asm("define i64 @print(i64 %a) nounwind ssp {");
@@ -141,9 +126,6 @@ let apply(file: string) (Prog(fundefs)):unit =
   asm("end:");
   asm_p("ret i64* %mem");
   asm("}");
-  asm("declare i8* @malloc(i64)");
 
-  List.iter
-    (fun (n,s) -> if s <> "" then asm(s))
-    (M.bindings !decls);
+  asm("declare i8* @malloc(i64)");
   asm_close()

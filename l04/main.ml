@@ -180,6 +180,10 @@ module Virtual = struct
     | RL of Type.t * string
     | RN of Type.t * string
 
+  type t =
+    | Print of r
+    | Bin of r * string * r * r
+
   let regid = function
     | RL (_,id) -> id
     | RN (_,id) -> id
@@ -187,10 +191,6 @@ module Virtual = struct
   let regt = function
     | RL (t,_) -> t
     | RN (t,_) -> t
-
-  type t =
-    | Print of r
-    | Bin of r * string * r * r
 
   let vs :t list ref = ref []
 
@@ -202,7 +202,7 @@ module Virtual = struct
     let r = RL(regt rx, genid("..")) in
     add(Bin(r, op, rx, M.find y env));
     r
-
+  
   let rec visit (env)(k: KNormal.t): r =
     match k with
       | KNormal.Int(i) ->
@@ -214,8 +214,8 @@ module Virtual = struct
         visit (M.add aId bR env) (cK)
       | KNormal.Print(aId) ->
         add(Print(M.find aId env));
-        RN(Type.Unit,"void")
-      | KNormal.Unit -> RN(Type.Unit, "void")
+        RN(Type.Unit,"0")
+      | KNormal.Unit -> RN(Type.Unit, "0")
       | KNormal.Var a ->
         M.find a env
 
@@ -234,7 +234,6 @@ module Emit = struct
     match r with
       | RL(_,id) -> "%" ^ id
       | RN(_,id) -> id
-
 
   let pt(t:Type.t): string =
     match t with
@@ -288,12 +287,16 @@ let parse src =
   let lexbuf = Lexing.from_string src in
   Parser.exp Lexer.token lexbuf
 
-let _ =
-  let src = "print 1;print (2 + 3);print ((2+3)-2); let a = 1+2 in print a" in
+let compile output src =
   let ast = parse src in
+  let ast = Typing.apply(ast) in
   let k = KNormal.apply(ast) in
   let vs = Virtual.apply(k) in
-  Emit.apply "a.ll" vs;
+  Emit.apply output vs
+
+let _ =
+  let src = "print 1;print (2 + 3);print ((2+3)-2); let a = 1+2 in print a" in
+  compile "a.ll" src;
   print_exec("llc a.ll -o a.s");
   print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")

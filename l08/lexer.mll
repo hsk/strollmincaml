@@ -14,12 +14,6 @@ rule token = parse
     { LPAREN }
 | ')'
     { RPAREN }
-| "true"
-    { BOOL(true) }
-| "false"
-    { BOOL(false) }
-| "not"
-    { NOT }
 | digit+
     { INT(int_of_string (Lexing.lexeme lexbuf)) }
 | '-'
@@ -36,6 +30,12 @@ rule token = parse
     { IN }
 | '='
     { EQUAL }
+| "true"
+    { BOOL(true) }
+| "false"
+    { BOOL(false) }
+| "not"
+    { NOT }
 | "<>"
     { LESS_GREATER }
 | "<="

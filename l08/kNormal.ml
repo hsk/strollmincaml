@@ -6,26 +6,29 @@ type t =
   | Int of int
   | Add of string * string
   | Sub of string * string
+  | Bool of bool
+  | If of string * t * t
+  | LE of string * string
+  | Eq of string * string
   | Let of (string * Type.t) * t * t
   | Unit
   | Var of string
   | LetRec of fundef * t
   | App of string * string list
   | ExtFunApp of string * string list * Type.t
-  | Bool of bool
-  | If of string * t * t
-  | LE of string * string
-  | Eq of string * string
 and fundef = {
   name : string * Type.t;
   args : (string * Type.t) list;
   body : t }
 
-
 let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b
   | Sub(a,b) -> fprintf ppf "Sub(\"%s\",\"%s\")@?" a b
+  | Bool(b) ->  fprintf ppf "Bool(%b)@?" b
+  | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
+  | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
+  | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)@?" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -36,10 +39,6 @@ let rec print_t ppf = function
       print_t a print_t b
   | App(s,ss) -> fprintf ppf "App(\"%s\",[%s])@?" s (String.concat "; " ss)
   | ExtFunApp(s,ss,t) -> fprintf ppf "ExtFunApp(\"%s\",[%s],%a)@?" s (String.concat "; " ss) Type.print_t t
-  | Bool(b) ->  fprintf ppf "Bool(%b)@?" b
-  | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
-  | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
-  | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
 
 let insert_let (e, t) k = (* letを挿入する補助関数 (caml2html: knormal_insert) *)
   match e with
@@ -64,6 +63,27 @@ let rec visit(env:Type.t M.t)(e:Syntax.t):(t * Type.t) =
         insert_let (visit env e2) (fun y ->
           (Sub(x, y), Type.Int)
         )
+      )
+    | Syntax.Bool(b) -> Bool b, Type.Bool
+    | Syntax.Not(e) ->
+      visit env (Syntax.If(e, Syntax.Bool(false), Syntax.Bool(true)))
+    | Syntax.Eq (e1, e2) ->
+      insert_let (visit env e1) (fun x ->
+        insert_let (visit env e2) (fun y ->
+          (Eq(x,y), Type.Bool)
+        )
+      )
+    | Syntax.LE (e1, e2) ->
+      insert_let (visit env e1) (fun x ->
+        insert_let (visit env e2) (fun y ->
+          (LE(x,y), Type.Bool)
+        )
+      )
+    | Syntax.If(e1, e2, e3) ->
+      insert_let (visit env e1) (fun x ->
+        let e2', t2 = visit env e2 in
+        let e3', t3 = visit env e3 in
+        If (x, e2', e3'), t2
       )
     | Syntax.Let((x,t), e1, e2) ->
       let e1', t1 = visit env e1 in
@@ -103,27 +123,6 @@ let rec visit(env:Type.t M.t)(e:Syntax.t):(t * Type.t) =
       | _, t ->
         fprintf str_formatter "type error in app %a" Type.print_t t;
         failwith (flush_str_formatter())
-      )
-    | Syntax.Bool(b) -> Bool b, Type.Bool
-    | Syntax.Not(e) ->
-      visit env (Syntax.If(e, Syntax.Bool(false), Syntax.Bool(true)))
-    | Syntax.Eq (e1, e2) ->
-      insert_let (visit env e1) (fun x ->
-        insert_let (visit env e2) (fun y ->
-          (Eq(x,y), Type.Bool)
-        )
-      )
-    | Syntax.LE (e1, e2) ->
-      insert_let (visit env e1) (fun x ->
-        insert_let (visit env e2) (fun y ->
-          (LE(x,y), Type.Bool)
-        )
-      )
-    | Syntax.If(e1, e2, e3) ->
-      insert_let (visit env e1) (fun x ->
-        let e2', t2 = visit env e2 in
-        let e3', t3 = visit env e3 in
-        If (x, e2', e3'), t2
       )
 
 let apply (e: Syntax.t): t =

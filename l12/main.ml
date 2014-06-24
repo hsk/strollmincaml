@@ -9,12 +9,7 @@ let parse src =
   let lexbuf = Lexing.from_string src in
   Parser.exp Lexer.token lexbuf
 
-let _ =
-  let src = "
-    let rec f a n =
-      if n = 0 then a
-      else f (a+n) (n-1)
-    in print(f 0 10)" in
+let compile output src =
   let ast = parse src in
   fprintf std_formatter "ast=%a@." Syntax.print_t ast;
   let ast = Typing.apply(ast) in
@@ -25,8 +20,16 @@ let _ =
   fprintf std_formatter "closure %a@." Closure.print_prog c;
   let v = Virtual.apply(c) in
   fprintf std_formatter "virtual ok@.";
-  Emit.apply "a.ll" v;
-  fprintf std_formatter "emit ok@.";
+  Emit.apply output v;
+  fprintf std_formatter "emit ok@."
+
+let _ =
+  let src = "
+    let rec f a n =
+      if n = 0 then a
+      else f (a+n) (n-1)
+    in print(f 0 10)" in
+  compile "a.ll" src;
   print_exec("llc a.ll -o a.s");
-  print_exec("llvm-gcc -m64 a.s float.c");
+  print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")

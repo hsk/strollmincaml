@@ -10,7 +10,7 @@ module KNormal = struct
     | Print of string
     | Let of string * t * t
 
-  let rec visit (e:Syntax.t):t =
+  let rec visit (e:Syntax.t): t =
     match e with
       | Syntax.Int(i) -> Int(i)
       | Syntax.Add(aE, bE) ->
@@ -43,13 +43,13 @@ module Virtual = struct
     | RL of string
     | RN of string
 
-  let regid = function
-    | RL id -> id
-    | RN id -> id
-
   type t =
     | Print of r
     | Bin of r * string * r * r
+
+  let regid = function
+    | RL id -> id
+    | RN id -> id
 
   let vs :t list ref = ref []
 
@@ -72,7 +72,7 @@ module Virtual = struct
         visit (M.add aId aR env) bK
       | KNormal.Print(aId) ->
         add(Print(M.find aId env));
-        RN("void")
+        RN("0")
 
   let apply (k: KNormal.t): t list =
     vs := [];
@@ -128,12 +128,15 @@ let parse src =
   let lexbuf = Lexing.from_string src in
   Parser.exp Lexer.token lexbuf
 
-let _ =
-  let src = "print 1;print (2 + 3);print ((2+3)-2)" in
+let compile output src =
   let ast = parse src in
   let k = KNormal.apply(ast) in
   let vs = Virtual.apply(k) in
-  Emit.apply "a.ll" vs;
+  Emit.apply output vs
+
+let _ =
+  let src = "print 1;print (2 + 3);print ((2+3)-2)" in
+  compile "a.ll" src;
   print_exec("llc a.ll -o a.s");
   print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")

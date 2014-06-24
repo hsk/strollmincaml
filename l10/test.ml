@@ -30,12 +30,7 @@ let test_error f src =
 let test(src, expected) =
   Printf.printf "compile %s\n" src;
   let f src =
-    let ast = parse src in
-    let ast = Typing.apply(ast) in
-    let k = KNormal.apply(ast) in
-    let c = Closure.apply(k) in
-    let v = Virtual.apply(c) in
-    Emit.apply "a.ll" v;
+    compile "a.ll" src;
     match exec("llc a.ll -o a.s") with
     | ("","","0") ->
       (match exec("llvm-gcc -m64 a.s") with
@@ -65,6 +60,7 @@ let check_point name =
 open Syntax
 
 let _ =
+
   test("print 1;print (2 + 3);print ((2+3)-2)","(1\n5\n3\n,,0)");
   test("let a = 1+2 in print a","(3\n,,0)");
   test("let a = let b = 1+2 in b in print a","(3\n,,0)");
@@ -96,6 +92,4 @@ let _ =
   ", "(832040\n,,0)");
   test("let a = Array.create 2 112 in print(a.(1));a.(0)<-2;print(a.(0))","(112\n2\n,,0)");
   test("let a = (1,2) in let (b,c) = a in print(b); print(c)", "(1\n2\n,,0)");
-  
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)
-

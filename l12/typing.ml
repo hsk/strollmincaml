@@ -1,6 +1,7 @@
 (**
  * 型推論
  *)
+
 open Syntax
 open Format
 
@@ -15,8 +16,6 @@ let extenv:Type.t M.t ref = ref M.empty
  *)
 let rec deref_type(x:Type.t):Type.t =
   match x with
-    | Type.Fun(t1s, t2) ->
-      Type.Fun(List.map deref_type t1s, deref_type t2)
     | Type.Var({contents=None} as r) ->
       r := Some(Type.Int);
       Type.Int
@@ -24,6 +23,8 @@ let rec deref_type(x:Type.t):Type.t =
       let t1 = deref_type(t) in
       r := Some(t1);
       t1
+    | Type.Fun(t1s, t2) ->
+      Type.Fun(List.map deref_type t1s, deref_type t2)
     | Type.Array(t) -> Type.Array(deref_type t)
     | Type.Tuple(ts) -> Type.Tuple(List.map deref_type ts)
     | t -> t
@@ -71,12 +72,12 @@ let rec unify (t1:Type.t) (t2:Type.t) =
   (* 出現チェック *)
   let rec occur(r1:Type.t option ref)(r2:Type.t):bool =
     match r2 with
-    | Type.Fun(t2s, t2) -> List.exists (occur r1) t2s || occur r1 t2
-    | Type.Array(t2) -> occur r1 t2
-    | Type.Tuple(t2s) -> List.exists (occur r1) t2s
     | Type.Var(r2) when (r1 == r2) -> true
     | Type.Var({contents=None}) -> false
     | Type.Var({contents=Some(t2)}) -> occur r1 t2
+    | Type.Fun(t2s, t2) -> List.exists (occur r1) t2s || occur r1 t2
+    | Type.Array(t2) -> occur r1 t2
+    | Type.Tuple(t2s) -> List.exists (occur r1) t2s
     | _ -> false
   in
 
@@ -118,7 +119,6 @@ let rec infer (env:Type.t M.t) (e:t):Type.t =
     match e with
       | Unit -> Type.Unit
       | Int(_) -> Type.Int
-
       | Add(e1, e2)
       | Sub(e1, e2) ->
         unify Type.Int (infer env e1);
@@ -135,6 +135,22 @@ let rec infer (env:Type.t M.t) (e:t):Type.t =
       | FNeg(e1) ->
         unify Type.Float (infer env e1);
         Type.Float
+      | Bool(_) -> Type.Bool
+      | Not(e) ->
+        unify Type.Bool (infer env e);
+        Type.Bool
+      | Eq(e1, e2) ->
+        unify (infer env e1) (infer env e2);
+        Type.Bool
+      | LE (e1, e2) ->
+        unify (infer env e1) (infer env e2);
+        Type.Bool
+      | If(e1, e2, e3) ->
+        unify (infer env e1) Type.Bool;
+        let t2 = infer env e2 in
+        let t3 = infer env e3 in
+        unify t2 t3;
+        t2
       | Let((x, t), e1, e2) ->
         unify t (infer env e1);
         infer (M.add x t env) e2
@@ -152,22 +168,6 @@ let rec infer (env:Type.t M.t) (e:t):Type.t =
         let t = Type.Var(ref None) in
         unify (infer env e) (Type.Fun(List.map (infer env) es, t));
         t
-      | Bool(_) -> Type.Bool
-      | Not(e) ->
-        unify Type.Bool (infer env e);
-        Type.Bool
-      | Eq(e1, e2) ->
-        unify (infer env e1) (infer env e2);
-        Type.Bool
-      | LE (e1, e2) ->
-        unify (infer env e1) (infer env e2);
-        Type.Bool
-      | If(e1, e2, e3) ->
-        unify (infer env e1) Type.Bool;
-        let t2 = infer env e2 in
-        let t3 = infer env e3 in
-        unify t2 t3;
-        t2
       | Array(e1, e2) ->
         unify (infer env e1) Type.Int;
         Type.Array(infer env e2)
@@ -185,7 +185,6 @@ let rec infer (env:Type.t M.t) (e:t):Type.t =
       | LetTuple(xts, e1, e2) ->
         unify (Type.Tuple(List.map snd xts)) (infer env e1);
         infer (M.add_list xts env) e2
-
   with
     | Unify(t1, t2) ->
       raise (Error(deref_term(e), deref_type(t1), deref_type(t2)))
@@ -202,7 +201,6 @@ let apply (e:t): t =
       (*failwith("top level does not have type unit "+a+" "+b)*)
       failwith("top level does not have type unit")
     | Error(a, t1, t2) ->
-      (*failwith("top level does not have type unit "+a+" "+b)*)
       fprintf str_formatter "error %a %a in %a"
         Type.print_t t1 
         Type.print_t t2

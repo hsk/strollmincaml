@@ -1,6 +1,5 @@
 open Main
 open Utils
-open Format
 
 let count = ref 0
 let ok = ref 0
@@ -31,13 +30,7 @@ let test_error f src =
 let test(src, expected) =
   Printf.printf "compile %s\n" src;
   let f src =
-    let ast = parse src in
-    fprintf std_formatter "ast=%a@." Syntax.print_t ast;
-    let ast = Typing.apply(ast) in
-    let k = KNormal.apply(ast) in
-    let c = Closure.apply(k) in
-    let v = Virtual.apply(c) in
-    Emit.apply "a.ll" v;
+    compile "a.ll" src;
     match exec("llc a.ll -o a.s") with
     | ("","","0") ->
       (match exec("llvm-gcc -m64 a.s") with
@@ -67,6 +60,7 @@ let check_point name =
 open Syntax
 
 let _ =
+
   test("print 1;print (2 + 3);print ((2+3)-2)","(1\n5\n3\n,,0)");
   test("let a = 1+2 in print a","(3\n,,0)");
   test("let a = let b = 1+2 in b in print a","(3\n,,0)");
@@ -82,6 +76,4 @@ let _ =
   ", "(2\n5\n3\n3\n,,0)");
   test("let rec f x = let rec e y = x + y in print 1; e in print ((f 2) 1)","(1\n3\n,,0)");
   test("let rec f x = let rec e y = x + y in print (e 1) in f 2","(3\n,,0)");
-
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)
-

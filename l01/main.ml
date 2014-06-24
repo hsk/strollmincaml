@@ -100,6 +100,10 @@ let print_exec cmd =
   match exec cmd with
   | (a,b,c) -> fprintf std_formatter "(%s,%s,%s)@." a b c
 
+let compile output ast =
+  let vs = Virtual.apply(ast) in
+  Emit.apply output vs
+
 open Syntax
 
 let _ =
@@ -109,8 +113,7 @@ let _ =
       Let(
         Print(Add(Int(2), Int(3))),
         Print(Sub(Add(Int(2), Int(3)), Int(2))))) in
-  let vs = Virtual.apply(ast) in
-  Emit.apply "a.ll" vs;
+  compile "a.ll" ast;
   print_exec("llc a.ll -o a.s");
   print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")

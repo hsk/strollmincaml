@@ -29,9 +29,7 @@ let test_error f src =
 
 let test(src, expected) =
   let f src =
-    let k = KNormal.apply(src) in
-    let vs = Virtual.apply(k) in
-    Emit.apply "a.ll" vs;
+    compile "a.ll" src;
     match exec("llc a.ll -o a.s") with
     | ("","","0") ->
       (match exec("llvm-gcc -m64 a.s") with
@@ -68,4 +66,3 @@ let _ =
       Print(Add(Int(2), Int(3))),
       Print(Sub(Add(Int(2), Int(3)), Int(2))))),"(1\n5\n3\n,,0)");
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)
-

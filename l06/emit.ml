@@ -4,8 +4,8 @@ open Virtual
 let p(r:r): string =
   match r with
     | RL(_,id) -> "%" ^ id
-    | RG(_,id) -> "@" ^ id
     | RN(_,id) -> id
+    | RG(_,id) -> "@" ^ id
 
 let rec pt(t:Type.t): string =
   match t with
@@ -56,7 +56,6 @@ let apply(file: string) (Prog(fundefs)):unit =
     asm("}");
 
   ) fundefs;
-
 
   asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
   asm("define i64 @print(i64 %a) nounwind ssp {");

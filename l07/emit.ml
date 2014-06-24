@@ -4,8 +4,8 @@ open Virtual
 let p(r:r): string =
   match r with
     | RL(_,id) -> "%" ^ id
-    | RG(_,id) -> "@" ^ id
     | RN(_,id) -> id
+    | RG(_,id) -> "@" ^ id
 
 let rec pt(t:Type.t): string =
   match t with
@@ -36,10 +36,6 @@ let emit(v: t) =
         | _ ->
           asm_p(p(id) ^ " = call " ^ pr(r) ^ "(" ^ ps ^ ") nounwind ssp")
       )
-    | InsertValue(r1, r2, r3, i) ->
-      asm_p(p(r1) ^ " = insertvalue " ^ pr(r2) ^ ", " ^ pr(r3) ^ ", " ^ string_of_int i)
-    | ExtractValue(r1, r2, i) ->
-      asm_p(p(r1) ^ " = extractvalue " ^ pr(r2) ^ ", " ^ string_of_int i)
     | Ret(a) ->
       (match regt a with
         | Type.Unit ->
@@ -47,6 +43,10 @@ let emit(v: t) =
         | _ ->
           asm_p("ret " ^ pr(a))
       )
+    | InsertValue(r1, r2, r3, i) ->
+      asm_p(p(r1) ^ " = insertvalue " ^ pr(r2) ^ ", " ^ pr(r3) ^ ", " ^ string_of_int i)
+    | ExtractValue(r1, r2, i) ->
+      asm_p(p(r1) ^ " = extractvalue " ^ pr(r2) ^ ", " ^ string_of_int i)
 
 let apply(file: string) (Prog(fundefs)):unit =
   asm_open(file);
@@ -60,7 +60,6 @@ let apply(file: string) (Prog(fundefs)):unit =
     asm("}");
 
   ) fundefs;
-
 
   asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
   asm("define i64 @print(i64 %a) nounwind ssp {");

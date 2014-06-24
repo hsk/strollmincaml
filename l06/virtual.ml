@@ -1,9 +1,20 @@
 open Format
 open Utils
+
 type r =
   | RL of Type.t * string
   | RN of Type.t * string
   | RG of Type.t * string
+
+type t =
+  | Call of r * r * r list
+  | Bin of r * string * r * r
+  | Ret of r
+
+type fundef =
+   {name : string; args : (string * Type.t) list; body : t list; ret : Type.t}
+
+type prog = Prog of fundef list
 
 let regid = function
   | RL (_,id) -> id
@@ -14,16 +25,6 @@ let regt = function
   | RL (t,_) -> t
   | RN (t,_) -> t
   | RG (t,_) -> t
-
-type t =
-  | Bin of r * string * r * r
-  | Call of r * r * r list
-  | Ret of r
-
-type fundef =
-   {name : string; args : (string * Type.t) list; body : t list; ret : Type.t}
-
-type prog = Prog of fundef list
 
 let vs :t list ref = ref []
 
@@ -36,7 +37,7 @@ let bin env op x y =
   add(Bin(r, op, rx, M.find y env));
   r
 
-let rec visit(env:r M.t)(c: Closure.t): r =
+let rec visit (env)(c: Closure.t): r =
   match c with
     | Closure.Int(i) ->
       RN(Type.Int, string_of_int i)
@@ -45,7 +46,7 @@ let rec visit(env:r M.t)(c: Closure.t): r =
     | Closure.Let((aId,aT), bK, cK) ->
       let bR = visit env bK in
       visit (M.add aId bR env) (cK)
-    | Closure.Unit -> RN(Type.Unit, "void")
+    | Closure.Unit -> RN(Type.Unit, "0")
     | Closure.Var a ->
       M.find a env
     | Closure.AppDir(nameId, prmIds) ->
@@ -65,9 +66,10 @@ let visitfun env {
     Closure.name = (x, t); 
     Closure.args = yts;
     Closure.body = e } =
-  vs := [];
+
   match t with
   | Type.Fun(_, t) ->
+    vs := [];
     let env = M.add x (RG(t,x)) env in
     let env' = M.add_list (List.map (fun (s,t) -> (s, RL(t,s))) yts) env in
     let r = visit env' e in
@@ -80,7 +82,7 @@ let apply (Closure.Prog(fundefs, e)): prog =
     Closure.args=[]; Closure.body= e}] in
   let (_,fundefs) =
     List.fold_left
-      (fun  (env, fundefs) fundef ->
+      (fun (env, fundefs) fundef ->
         let (env, fundef) = visitfun env fundef in
         (env, fundef::fundefs)
       )

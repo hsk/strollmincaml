@@ -1,7 +1,7 @@
 %{
 open Syntax
-let addtyp x = (x, Type.gentyp ())
 open Utils
+let addtyp x = (x, Type.gentyp ())
 %}
 
 %token <int> INT
@@ -34,6 +34,7 @@ simple_exp:
     { Int($1) }
 | IDENT
     { Var($1) }
+
 exp:
 | simple_exp
     { $1 }
@@ -41,11 +42,11 @@ exp:
     { Add($1, $3) }
 | exp MINUS exp
     { Sub($1, $3) }
+| exp SEMICOLON exp
+    { Let((genid(".."), Type.Unit), $1, $3) }
 | LET IDENT EQUAL exp IN exp
     %prec prec_let
     { Let(addtyp $2, $4, $6) }
-| exp SEMICOLON exp
-    { Let((genid(".."), Type.Unit), $1, $3) }
 | PRINT simple_exp
     %prec prec_app
     { Print($2) }

@@ -4,6 +4,7 @@ type t = (* MinCamlの型を表現するデータ型 (caml2html: type_t) *)
   | Var of t option ref
   | Fun of t list * t (* arguments are uncurried *)
   | Tuple of t list
+  
 let gentyp () = Var(ref None) (* 新しい型変数を作る *)
 
 open Format
@@ -23,5 +24,3 @@ let rec print_t ppf = function
   | Fun(ts,t) -> fprintf ppf "Fun(%a,%a)@?" print_ts ts print_t t
   | Tuple(ts) -> fprintf ppf "Tuple(%a)@?" print_ts ts
 and print_ts ppf ts = prints print_t ppf ts
-
-

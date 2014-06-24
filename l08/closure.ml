@@ -6,17 +6,16 @@ type t = (* クロージャ変換後の式 (caml2html: closure_t) *)
   | Int of int
   | Add of string * string
   | Sub of string * string
-  | Let of (string * Type.t) * t * t
-  | Var of string
-  | MakeCls of (string * Type.t) * closure * t
-  | AppCls of string * string list
-  | AppDir of string * string list
-  | ExtFunApp of string * string list * Type.t
   | Bool of bool
   | If of string * t * t
   | LE of string * string
   | Eq of string * string
-
+  | Let of (string * Type.t) * t * t
+  | Var of string
+  | AppDir of string * string list
+  | ExtFunApp of string * string list * Type.t
+  | MakeCls of (string * Type.t) * closure * t
+  | AppCls of string * string list
 type fundef = {
   name : string * Type.t;
   args : (string * Type.t) list;
@@ -29,6 +28,10 @@ let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b
   | Sub(a,b) -> fprintf ppf "Sub(\"%s\",\"%s\")@?" a b
+  | Bool(b) -> fprintf ppf "Bool(%b)@?" b
+  | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
+  | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
+  | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)@?" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -41,10 +44,6 @@ let rec print_t ppf = function
   | AppCls(s,ss) -> fprintf ppf "AppCls(\"%s\",[%s])@?" s (String.concat "; " ss)
   | AppDir(s,ss) -> fprintf ppf "AppDir(\"%s\",[%s])@?" s (String.concat "; " ss)
   | ExtFunApp(s,ss,t) -> fprintf ppf "ExtFunApp(\"%s\",[%s],%a)@?" s (String.concat "; " ss) Type.print_t t
-  | Bool(b) -> fprintf ppf "Bool(%b)@?" b
-  | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
-  | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
-  | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
 
 let print_fundef ppf = function
 | {name=(s,t);args=sts;formal_fv=zts;body=b} ->
@@ -56,6 +55,7 @@ let print_fundef ppf = function
 let print_fundefs ppf ls = Type.prints print_fundef ppf ls
 let print_prog ppf = function
 | Prog(fundefs,t) -> fprintf ppf "Prog(%a,%a)" print_fundefs fundefs print_t t
+
 (**
  * 自由変数集合の取得
  * 与えられた式内の自由変数の集合を取得する．
@@ -67,17 +67,18 @@ let rec freeVar (e:t): S.t =
     | Unit | Int(_) -> S.empty
     | Add(x, y)
     | Sub(x, y)  -> S.of_list [x; y]
+    | Bool(_) -> S.empty
+    | Eq(x, y) | LE(x, y) -> S.of_list [x; y]
+    | If(x, a, b) -> S.add x (S.union (freeVar a) (freeVar b))
     | Let((x, t), e1, e2) -> S.union (freeVar e1) (S.remove x (freeVar e2))
     | Var(x) -> S.singleton x
     | MakeCls((x, t), { entry = l; actual_fv = ys }, e) -> S.remove x (S.union (S.of_list ys) (freeVar e))
     | AppCls(x, ys) -> S.of_list (x :: ys)
     | AppDir(_, xs) -> S.of_list xs
     | ExtFunApp(_, xs, _) -> S.of_list xs
-    | Bool(_) -> S.empty
-    | Eq(x, y) | LE(x, y) -> S.of_list [x; y]
-    | If(x, a, b) -> S.add x (S.union (freeVar a) (freeVar b))
 
 let toplevel: fundef list ref = ref []
+
 let stack:fundef list list ref = ref []
 let push (c:fundef list) = 
   stack := c::!stack
@@ -92,8 +93,6 @@ let pop ():fundef list =
 (**
  * クロージャ変換ルーチン本体
  * 基本的にはKからCへの変換をする．
- * 関数呼び出しは関数の集合(known)にあればCAppDirをなければ，CAppClsを呼び出す．
- * 関数の定義は複雑なのでソースを直接参照．
  *)
 let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
   match e with
@@ -101,9 +100,14 @@ let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
   | KNormal.Int(i) -> Int(i)
   | KNormal.Add(x, y) -> Add(x, y)
   | KNormal.Sub(x, y) -> Sub(x, y)
+  | KNormal.Bool(b) -> Bool(b)
+  | KNormal.If(x, e1, e2) -> If(x, visit env known e1, visit env known e2)
+  | KNormal.Eq(e1, e2) -> Eq(e1, e2)
+  | KNormal.LE(e1, e2) -> LE(e1, e2)
   | KNormal.Var(x) -> Var(x)
   | KNormal.Let((x, t), e1, e2) ->
     Let((x, t), visit env known e1, visit (M.add x t env) known e2)
+
   | KNormal.LetRec({KNormal.name=(x, t);KNormal.args=yts;KNormal.body=e1}, e2) ->
 
     (* 新しい環境を作る *)
@@ -167,15 +171,11 @@ let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
   | KNormal.App(x, ys) ->
     if S.mem x known then AppDir(x, ys) else AppCls(x, ys)
   | KNormal.ExtFunApp(x, ys, t) -> ExtFunApp(x, ys, t)
-  | KNormal.Bool(b) -> Bool(b)
-  | KNormal.If(x, e1, e2) -> If(x, visit env known e1, visit env known e2)
-  | KNormal.Eq(e1, e2) -> Eq(e1, e2)
-  | KNormal.LE(e1, e2) -> LE(e1, e2)
 
 (**
  * クロージャ変換
  *)
-let apply(e:KNormal.t): prog =
+let apply (e:KNormal.t): prog =
   toplevel := [];
   let e = visit M.empty S.empty e in
   Prog(List.rev !toplevel, e)

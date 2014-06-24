@@ -8,10 +8,10 @@ type t = (* クロージャ変換後の式 (caml2html: closure_t) *)
   | Sub of string * string
   | Let of (string * Type.t) * t * t
   | Var of string
-  | MakeCls of (string * Type.t) * closure * t
-  | AppCls of string * string list
   | AppDir of string * string list
   | ExtFunApp of string * string list * Type.t
+  | MakeCls of (string * Type.t) * closure * t
+  | AppCls of string * string list
 type fundef = {
   name : string * Type.t;
   args : (string * Type.t) list;
@@ -47,6 +47,7 @@ let print_fundef ppf = function
 let print_fundefs ppf ls = Type.prints print_fundef ppf ls
 let print_prog ppf = function
 | Prog(fundefs,t) -> fprintf ppf "Prog(%a,%a)" print_fundefs fundefs print_t t
+
 (**
  * 自由変数集合の取得
  * 与えられた式内の自由変数の集合を取得する．
@@ -64,7 +65,9 @@ let rec freeVar (e:t): S.t =
     | AppCls(x, ys) -> S.of_list (x :: ys)
     | AppDir(_, xs) -> S.of_list xs
     | ExtFunApp(_, xs, _) -> S.of_list xs
+
 let toplevel: fundef list ref = ref []
+
 let stack:fundef list list ref = ref []
 let push (c:fundef list) = 
   stack := c::!stack
@@ -79,8 +82,6 @@ let pop ():fundef list =
 (**
  * クロージャ変換ルーチン本体
  * 基本的にはKからCへの変換をする．
- * 関数呼び出しは関数の集合(known)にあればCAppDirをなければ，CAppClsを呼び出す．
- * 関数の定義は複雑なのでソースを直接参照．
  *)
 let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
   match e with
@@ -91,6 +92,7 @@ let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
   | KNormal.Var(x) -> Var(x)
   | KNormal.Let((x, t), e1, e2) ->
     Let((x, t), visit env known e1, visit (M.add x t env) known e2)
+
   | KNormal.LetRec({KNormal.name=(x, t);KNormal.args=yts;KNormal.body=e1}, e2) ->
 
     (* 新しい環境を作る *)
@@ -158,7 +160,7 @@ let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
 (**
  * クロージャ変換
  *)
-let apply(e:KNormal.t): prog =
+let apply (e:KNormal.t): prog =
   toplevel := [];
   let e = visit M.empty S.empty e in
   Prog(List.rev !toplevel, e)

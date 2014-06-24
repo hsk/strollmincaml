@@ -1,14 +1,14 @@
 %{
 open Syntax
-let addtyp x = (x, Type.gentyp ())
 open Utils
+let addtyp x = (x, Type.gentyp ())
 %}
 
 %token <int> INT
+%token <string> IDENT
 %token <bool> BOOL
 %token NOT LESS_GREATER LESS GREATER GREATER_EQUAL LESS_EQUAL
 %token IF THEN ELSE
-%token <string> IDENT
 %token LET EQUAL IN 
 %token REC
 %token MINUS
@@ -17,6 +17,7 @@ open Utils
 %token LPAREN
 %token RPAREN
 %token EOF
+
 %right prec_let
 %right SEMICOLON
 %right prec_if
@@ -31,16 +32,17 @@ open Utils
 %%
 
 simple_exp:
-| LPAREN exp RPAREN
-    { $2 }
 | LPAREN RPAREN
     { Unit }
+| LPAREN exp RPAREN
+    { $2 }
 | INT
     { Int($1) }
 | BOOL
     { Bool($1) }
 | IDENT
     { Var($1) }
+
 exp:
 | simple_exp
     { $1 }
@@ -48,17 +50,6 @@ exp:
     { Add($1, $3) }
 | exp MINUS exp
     { Sub($1, $3) }
-| LET IDENT EQUAL exp IN exp
-    %prec prec_let
-    { Let(addtyp $2, $4, $6) }
-| LET REC fundef IN exp
-    %prec prec_let
-    { LetRec($3, $5) }
-| exp actual_args
-    %prec prec_app
-    { App($1, $2) }
-| exp SEMICOLON exp
-    { Let((genid(".."), Type.Unit), $1, $3) }
 | NOT exp
     %prec prec_app
     { Not($2) }
@@ -77,6 +68,17 @@ exp:
 | IF exp THEN exp ELSE exp
     %prec prec_if
     { If($2, $4, $6) }
+| exp SEMICOLON exp
+    { Let((genid(".."), Type.Unit), $1, $3) }
+| LET IDENT EQUAL exp IN exp
+    %prec prec_let
+    { Let(addtyp $2, $4, $6) }
+| LET REC fundef IN exp
+    %prec prec_let
+    { LetRec($3, $5) }
+| exp actual_args
+    %prec prec_app
+    { App($1, $2) }
 | error
     { failwith
       (Printf.sprintf "parse error near characters %d-%d"

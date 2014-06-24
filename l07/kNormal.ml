@@ -17,7 +17,6 @@ and fundef = {
   args : (string * Type.t) list;
   body : t }
 
-
 let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b

@@ -29,10 +29,7 @@ let test_error f src =
 
 let test(src, expected) =
   let f src =
-    let ast = parse src in
-    let k = KNormal.apply(ast) in
-    let vs = Virtual.apply(k) in
-    Emit.apply "a.ll" vs;
+    compile "a.ll" src;
     match exec("llc a.ll -o a.s") with
     | ("","","0") ->
       (match exec("llvm-gcc -m64 a.s") with
@@ -62,6 +59,6 @@ let check_point name =
 open Syntax
 
 let _ =
+
   test("print 1;print (2 + 3);print ((2+3)-2)","(1\n5\n3\n,,0)");
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)
-

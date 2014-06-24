@@ -1,6 +1,7 @@
 (**
  * 型推論
  *)
+
 open Syntax
 
 exception Unify of Type.t * Type.t
@@ -14,8 +15,6 @@ let extenv:Type.t M.t ref = ref M.empty
  *)
 let rec deref_type(x:Type.t):Type.t =
   match x with
-    | Type.Fun(t1s, t2) ->
-      Type.Fun(List.map deref_type t1s, deref_type t2)
     | Type.Var({contents=None} as r) ->
       r := Some(Type.Int);
       Type.Int
@@ -23,6 +22,8 @@ let rec deref_type(x:Type.t):Type.t =
       let t1 = deref_type(t) in
       r := Some(t1);
       t1
+    | Type.Fun(t1s, t2) ->
+      Type.Fun(List.map deref_type t1s, deref_type t2)
     | t -> t
 
 (**
@@ -52,10 +53,10 @@ let rec unify (t1:Type.t) (t2:Type.t) =
   (* 出現チェック *)
   let rec occur(r1:Type.t option ref)(r2:Type.t):bool =
     match r2 with
-    | Type.Fun(t2s, t2) -> List.exists (occur r1) t2s || occur r1 t2
     | Type.Var(r2) when (r1 == r2) -> true
     | Type.Var({contents=None}) -> false
     | Type.Var({contents=Some(t2)}) -> occur r1 t2
+    | Type.Fun(t2s, t2) -> List.exists (occur r1) t2s || occur r1 t2
     | _ -> false
   in
 
