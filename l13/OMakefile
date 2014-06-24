@@ -1,4 +1,4 @@
-.PHONY: all test clean
+.PHONY: all clean test
 OCamlGeneratedFiles(parser.ml lexer.ml)
 
 USE_OCAMLFIND = true
@@ -14,7 +14,6 @@ FILES[] =
   m
   typing
   kNormal
-  alpha
   closure
   virtual
   emit

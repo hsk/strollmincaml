@@ -2,83 +2,44 @@
 open Parser
 }
 
-let space = [' ' '\t' '\n' '\r']
-let digit = ['0'-'9']
 let lower = ['a'-'z']
 let upper = ['A'-'Z']
+let digit = ['0'-'9']
 
 rule token = parse
-| space+
-    { token lexbuf }
-| '('
-    { LPAREN }
-| ')'
-    { RPAREN }
-| "true"
-    { BOOL(true) }
-| "false"
-    { BOOL(false) }
-| "not"
-    { NOT }
+| [' ' '\n' '\r' '\t'] { token lexbuf }
 | digit+
     { INT(int_of_string (Lexing.lexeme lexbuf)) }
 | digit+ ('.' digit*)? (['e' 'E'] ['+' '-']? digit+)?
     { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
-| "-."
-    { MINUS_DOT }
-| "+."
-    { PLUS_DOT }
-| "*."
-    { AST_DOT }
-| "/."
-    { SLASH_DOT }
-| '-'
-    { MINUS }
-| '+'
-    { PLUS }
-| ';'
-    { SEMICOLON }
-| "let"
-    { LET }
-| "rec"
-    { REC }
-| "in"
-    { IN }
-| '='
-    { EQUAL }
-| "<>"
-    { LESS_GREATER }
-| "<="
-    { LESS_EQUAL }
-| ">="
-    { GREATER_EQUAL }
-| '<'
-    { LESS }
-| '>'
-    { GREATER }
-| "if"
-    { IF }
-| "then"
-    { THEN }
-| "else"
-    { ELSE }
-| ','
-    { COMMA }
-| '_'
-    { IDENT(Utils.genid("..")) }
-| "Array.create" (* [XX] ad hoc *)
-    { ARRAY_CREATE }
-| '.'
-    { DOT }
-| "<-"
-    { LESS_MINUS }
-| lower (digit|lower|upper|'_')* 
-    { IDENT(Lexing.lexeme lexbuf) }
-| eof
-    { EOF }
-| _
-    { failwith
-      (Printf.sprintf "unknown token %s near characters %d-%d"
-        (Lexing.lexeme lexbuf)
-        (Lexing.lexeme_start lexbuf)
-        (Lexing.lexeme_end lexbuf)) }
+| "-."           { SUB_DOT }
+| "+."           { ADD_DOT }
+| "*."           { MUL_DOT }
+| "/."           { DIV_DOT }
+| '+'            { ADD }
+| '-'            { SUB }
+| '('            { LPAREN }
+| ')'            { RPAREN }
+| '{'            { LBRACE }
+| '}'            { RBRACE }
+| ';'            { SEMICORON }
+| ":="           { VALEQ }
+| '_'            { IDENT(Utils.genid("..")) }
+| ','            { COMMA }
+| "true" { BOOL(true) }
+| "false" { BOOL(false) }
+| '!' { NOT }
+| "!=" { NE }
+| "==" { EQ }
+| "<=" { LE }
+| ">=" { GE }
+| '<'  { LT }
+| '>'  { GT }
+| "if" { IF }
+| "else" { ELSE }
+| "Array.create" { ARRAY_CREATE }
+| '[' { LBRACKET }
+| ']' { RBRACKET }
+| '=' { ASSIGN }
+| lower (digit|lower|upper|'_')*  { IDENT(Lexing.lexeme lexbuf) }
+| eof            { EOF }
