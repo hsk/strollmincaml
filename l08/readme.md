@@ -25,24 +25,20 @@ if文が使えるようにする訳ですね。
 
 ## type.ml
 
-type tに
+type tのIntの下にBoolを追加します:
 ```
   | Bool
 ```
 
-を追加します。
-
-print_tに
+print_tにもIntの下にBoolを追加します:
 
 ```
   | Bool -> fprintf ppf "Bool@?"
 ```
 
-を追加します。
-
 ## syntax.ml
 
-type tに
+type tのSubの下に Bool等を追加します:
 
 ```
   | Bool of bool
@@ -52,9 +48,8 @@ type tに
   | If of t * t * t
 ```
 
-を追加します。
 
-print_tに
+print_tのSubの下に以下を追加します:
 
 ```
   | Bool(b) -> fprintf ppf "Bool(%b)@?" b
@@ -64,11 +59,9 @@ print_tに
   | If(a,b,c) -> fprintf ppf "If(%a,%a,%a)@?" print_t a print_t b print_t c
 ```
 
-を追加します。
-
 ## parser.mly
 
-トークンを追加します。
+<string>の下にトークンを追加します。
 
 ```
 %token <bool> BOOL
@@ -83,13 +76,14 @@ print_tに
 %left EQUAL LESS_GREATER LESS GREATER LESS_EQUAL GREATER_EQUAL
 ```
 
+simple_expのINTの下にBOOLを追加します。
 
 ```
 | BOOL
     { Bool($1) }
 ```
-を simple_expに追加します。
 
+expのexp MINUS expの下に以下を追加します:
 ```
 | NOT exp
     %prec prec_app
@@ -110,7 +104,6 @@ print_tに
     %prec prec_if
     { If($2, $4, $6) }
 ```
-をexpに追加します。
 
 
 ## lexer.mll
@@ -168,7 +161,7 @@ unifyの以下の箇所に
   | (Type.Unit, Type.Unit) | (Type.Int, Type.Int) -> ()
 ```
 
-Boolを入れて以下のようにします:
+Boolを加えて以下のようにします:
 
 ```
   | Type.Unit, Type.Unit | Type.Bool, Type.Bool | Type.Int, Type.Int -> ()
@@ -250,7 +243,6 @@ type tに以下を追加します:
   | If of string * t * t
   | LE of string * string
   | Eq of string * string
-
 ```
 
 print_tに以下を追加します:
@@ -260,7 +252,6 @@ print_tに以下を追加します:
   | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
   | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
   | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
-
 ```
 
 freeVarに以下を追加します:
@@ -269,7 +260,6 @@ freeVarに以下を追加します:
     | Bool(_) -> S.empty
     | Eq(x, y) | LE(x, y) -> S.of_list [x; y]
     | If(x, a, b) -> S.add x (S.union (freeVar a) (freeVar b))
-
 ```
 
 visitに以下を追加します:
@@ -336,7 +326,6 @@ emitのBinの箇所をeqとleに対応します:
 
 ```
     | Bin(id, op, a, b) ->
-
       (match op with
       | "eq" | "ne" ->
           let reg1 = RL(Type.Bool,genid("..")) in
@@ -359,15 +348,16 @@ emit に Jne, Goto, Label, Phiを追加します:
       asm_p(reg ^ " = icmp ne " ^ ptr(r) ^ " " ^ p(r) ^ ", 0");
       asm_p("br i1 " ^ reg ^ ", label %" ^ jmp1 ^ ", label %" ^ jmp2);
       asm(label ^ ":")
-
     | Goto(label, jmp) ->
       asm_p("br label %" ^ jmp);
       if (label <> "") then asm(label ^ ":") else ()
-
     | Label(jmp, label) ->
       if (jmp <> "") then asm_p("br label %" ^ jmp) else ();
       asm(label ^ ":")
-
     | Phi(r, l1, l2, t, r1, r2) ->
       asm_p(p(r) ^ " = phi " ^ pt(t) ^ " [" ^ p(r1) ^ ", %" ^ l1 ^ "], [" ^ p(r2) ^ ", %" ^ l2 ^ "]")
 ```
+
+分量が多かったような気もしますが、
+omake omake testで問題なければ完了です。
+

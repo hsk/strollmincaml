@@ -17,7 +17,6 @@ let regt = function
   | RG (t,_) -> t
 
 type t =
-  | Print of r
   | Bin of r * string * r * r
   | Call of r * r * r list
   | InsertValue of r * r * r * int
@@ -101,9 +100,6 @@ let rec visit(env:r M.t)(c: Closure.t): r =
     | Closure.Let((aId,aT), bK, cK) ->
       let bR = visit env bK in
       visit (M.add aId bR env) (cK)
-    | Closure.Print(aId) ->
-      add(Print(M.find aId env));
-      RN(Type.Unit,"0")
     | Closure.Unit -> RN(Type.Unit, "0")
     | Closure.Var a ->
       (try
@@ -123,6 +119,12 @@ let rec visit(env:r M.t)(c: Closure.t): r =
         Not_found ->
           failwith ("not found appdir "^ nameId)
       )
+    | Closure.ExtFunApp(nameId, prmIds, t) ->
+      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+      let nameR = RG(t, nameId) in
+      let retR = RL(t, genid("..")) in
+      add(Call(retR, nameR, prmRs));
+      retR
 
     (* クロージャ生成 *)
     | Closure.MakeCls(
@@ -219,16 +221,7 @@ let rec visit(env:r M.t)(c: Closure.t): r =
           fprintf str_formatter "x=%s t=%a" x Type.print_t t;
           failwith (flush_str_formatter())
       )
-    | Closure.ExtFunApp(nameId, prmIds) ->
-      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
-      let nameR = M.find nameId env in
-      (match regt nameR with
-        | Type.Fun(l,t) ->
-          let retR = RL(t, genid("..")) in
-          add(Call(retR, nameR, prmRs));
-          retR
-        | t -> failwith("type error")
-      )
+    | Closure.ExtArray(x, t) -> RG(t, "min_caml_" ^ x)
     | Closure.LetTuple (atl, a, e) ->
         let ar = M.find a env in
         let (env,_ ) = List.fold_left

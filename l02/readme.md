@@ -104,7 +104,7 @@ Letの連続はスタックを消費しないので大きなサイズでも問�
         visit (M.add aId aR env) bK
       | KNormal.Print(aId) ->
         add(Print(M.find aId env));
-        RN("void")
+        RN("0")
 ```
 
 applyは引数の型が変わっていますので、変数名も変更しましょう。
@@ -122,33 +122,17 @@ end
 
 さて、処理は出来上がったので組み込んでみましょう。
 
+compileの以下の箇所に
 ```
   let vs = Virtual.apply(ast) in
 ```
 
-の箇所にKNormalを追加します。
+KNormalを追加します。
 
 ```
   let k = KNormal.apply(ast) in
   let vs = Virtual.apply(k) in
 ```
-
-## test.ml
-
-テストも修正します。
-
-```
-    let vs = Virtual.apply(src) in
-```
-
-の箇所を同じように修正します。
-
-```
-    let k = KNormal.apply(src) in
-    let vs = Virtual.apply(k) in
-```
-
-テストプログラムの追加はありません。
 
 ```
 $ omake test

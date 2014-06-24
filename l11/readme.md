@@ -13,7 +13,7 @@ Floatは +. -. *. /. で四則演算し、マイナスを取るには -.を使�
 
 ## syntax.ml
 
-type tに以下を追加します:
+type tのSubの下に以下を追加します:
 
 ```
   | Neg of t
@@ -25,7 +25,7 @@ type tに以下を追加します:
   | FNeg of t
 ```
 
-print_tに以下を追加します:
+print_tのSubの下に以下を追加します:
 
 ```
   | Neg(a) -> fprintf ppf "Neg(%a)@?" print_t a
@@ -39,13 +39,13 @@ print_tに以下を追加します:
 
 ## type.ml
 
-type tに以下を追加します:
+type tのIntの下に以下を追加します:
 
 ```
   | Float
 ```
 
-print_tに以下を追加します:
+print_tのIntの下に以下を追加します:
 
 ```
   | Float -> fprintf ppf "Float@?"
@@ -115,7 +115,7 @@ expに以下を追加します:
 
 ## typing.ml
 
-open Utilsの下に以下を追加します:
+open Syntaxの下に以下を追加します:
 
 ```
 open Format
@@ -171,8 +171,8 @@ inferに以下を追加します:
 type tに以下を追加します:
 
 ```
-  | Float of float
   | Neg of string
+  | Float of float
   | FAdd of string * string
   | FSub of string * string
   | FMul of string * string
@@ -312,3 +312,5 @@ ptにFloat型を追加します:
 ```
   | Type.Float -> "double"
 ```
+
+omake omake testで問題なければ完了です。

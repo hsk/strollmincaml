@@ -16,7 +16,6 @@ open Utils
 %token SEMICOLON
 %token LPAREN
 %token RPAREN
-%token PRINT
 %token EOF
 %token COMMA
 %token DOT LESS_MINUS ARRAY_CREATE
@@ -73,9 +72,6 @@ exp:
     { App($1, $2) }
 | exp SEMICOLON exp
     { Let((genid(".."), Type.Unit), $1, $3) }
-| PRINT simple_exp
-    %prec prec_app
-    { Print($2) }
 | NOT exp
     %prec prec_app
     { Not($2) }

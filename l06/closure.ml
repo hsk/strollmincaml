@@ -9,7 +9,7 @@ type t = (* クロージャ変換後の式 (caml2html: closure_t) *)
   | Let of (string * Type.t) * t * t
   | Var of string
   | AppDir of string * string list
-  | Print of string
+  | ExtFunApp of string * string list * Type.t
 type fundef = {
   name : string * Type.t;
   args : (string * Type.t) list;
@@ -35,7 +35,7 @@ let rec visit (e:KNormal.t):t =
     toplevel := {name=(x, t); args=yts; body=visit e1 } :: !toplevel;
     visit e2
   | KNormal.App(x, ys) -> AppDir(x, ys)
-  | KNormal.Print(x) -> Print(x)
+  | KNormal.ExtFunApp(x, ys, t) -> ExtFunApp(x, ys, t)
 
 (**
  * クロージャ変換

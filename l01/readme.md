@@ -192,8 +192,8 @@ module Syntax = struct
     | Int of int
     | Add of t * t
     | Sub of t * t
-    | Print of t
     | Let of t * t
+    | Print of t
 end
 ```
 
@@ -305,33 +305,33 @@ emitが変換の本体で、asm_pで出力しています。
       | Bin(id, op, a, b) ->
         asm_p(p(id) ^ " = " ^ op ^ " i64 " ^ p(a) ^ ", " ^ p(b))
       | Print(a) ->
-        asm_p("call void @print_l(i64 " ^ p(a) ^ ") nounwind ssp")
+        asm_p("call i64 @print(i64 " ^ p(a) ^ ") nounwind ssp")
 
 ```
 
 applyがエントリポイントです。ファイルを開き、メイン関数を作って、
 List.iterでemitを呼び出しています。
 
-また、補助関数のprint_lを実装しています。
+また、補助関数のprintを実装しています。
 
 ```
   let apply(file: string) (vs: t list):unit =
     asm_open(file);
 
-    asm("define i32 @main() nounwind ssp {");
+    asm("define i64 @main() nounwind ssp {");
     asm("entry:");
     List.iter (fun v -> emit(v)) vs;
-    asm_p("ret i32 0");
+    asm_p("ret i64 0");
     asm("}");
 
     asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
-    asm("define void @print_l(i64 %a) nounwind ssp {");
+    asm("define i64 @print(i64 %a) nounwind ssp {");
     asm("entry:");
     asm_p("%a_addr = alloca i64, align 8");
     asm_p("store i64 %a, i64* %a_addr");
     asm_p("%0 = load i64* %a_addr, align 8");
     asm_p("%1 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([5 x i8]* @.str, i64 0, i64 0), i64 %0) nounwind");
-    asm_p("ret void");
+    asm_p("ret i64 0");
     asm("}");
     asm("declare i32 @printf(i8*, ...) nounwind");
     asm_close()
@@ -355,6 +355,10 @@ ASTを直接作成し、Virtualを呼び出し、仮想命令リストに変換�
 llcでアセンブラに変換し、gccでコンパイルし、./a.outで実行します。
 
 ```
+let compile output ast =
+  let vs = Virtual.apply(ast) in
+  Emit.apply output vs
+
 open Syntax
 
 let _ =
@@ -364,8 +368,7 @@ let _ =
       Let(
         Print(Add(Int(2), Int(3))),
         Print(Sub(Add(Int(2), Int(3)), Int(2))))) in
-  let vs = Virtual.apply(ast) in
-  Emit.apply "a.ll" vs;
+  compile "a.ll" ast;
   print_exec("llc a.ll -o a.s");
   print_exec("llvm-gcc -m64 a.s");
   print_exec("./a.out")
@@ -410,8 +413,7 @@ let test_error f src =
 
 let test(src, expected) =
   let f src =
-    let vs = Virtual.apply(src) in
-    Emit.apply "a.ll" vs;
+    compile "a.ll" src;
     match exec("llc a.ll -o a.s") with
     | ("","","0") ->
       (match exec("llvm-gcc -m64 a.s") with

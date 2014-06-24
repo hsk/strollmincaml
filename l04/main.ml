@@ -40,7 +40,7 @@ module Typing = struct
     | Add(e1, e2) -> Add(deref_term(e1), deref_term(e2))
     | Sub(e1, e2) -> Sub(deref_term(e1), deref_term(e2))
     | Let(xt, e1, e2) -> Let(deref_id_type(xt), deref_term(e1), deref_term(e2))
-    | Print e -> Print(deref_term(e))
+    | Print(e) -> Print(deref_term(e))
     | Unit | Var _ | Int _ -> e
 
   (* 単一化 *)
@@ -165,8 +165,9 @@ module KNormal = struct
         let e1', t1 = visit env e1 in
         let e2', t2 = visit (M.add x t env) e2 in
         Let((x, t), e1', e2'), t2
-      | Syntax.Var(s) ->
-        Var(s), (M.find s env)
+      | Syntax.Var(x) when M.mem x env -> Var(x), M.find x env
+      | Syntax.Var(x) -> (* 外部配列の参照 (caml2html: knormal_extarray) *)
+        failwith (Printf.sprintf "external variable %s does not have an array type" x)
 
   let apply (e: Syntax.t): t =
     fst (visit M.empty e)
@@ -254,25 +255,25 @@ module Emit = struct
       | Bin(id, op, a, b) ->
         asm_p(p(id) ^ " = " ^ op ^ " " ^ pr a ^ ", " ^ p(b))
       | Print(a) ->
-        asm_p("call void @print_l(" ^ pr a ^ ") nounwind ssp")
+        asm_p("call i64 @print(" ^ pr a ^ ") nounwind ssp")
 
   let apply(file: string) (vs: t list):unit =
     asm_open(file);
 
-    asm("define i32 @main() nounwind ssp {");
+    asm("define i64 @main() nounwind ssp {");
     asm("entry:");
     List.iter (fun v -> emit(v)) vs;
-    asm_p("ret i32 0");
+    asm_p("ret i64 0");
     asm("}");
 
     asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
-    asm("define void @print_l(i64 %a) nounwind ssp {");
+    asm("define i64 @print(i64 %a) nounwind ssp {");
     asm("entry:");
     asm_p("%a_addr = alloca i64, align 8");
     asm_p("store i64 %a, i64* %a_addr");
     asm_p("%0 = load i64* %a_addr, align 8");
     asm_p("%1 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([5 x i8]* @.str, i64 0, i64 0), i64 %0) nounwind");
-    asm_p("ret void");
+    asm_p("ret i64 0");
     asm("}");
     asm("declare i32 @printf(i8*, ...) nounwind");
     asm_close()

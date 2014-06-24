@@ -11,7 +11,7 @@ let gentyp () = Var(ref None) (* 新しい型変数を作る *)
 
 open Format
 
-let rec print_ls f ppf ls =
+let rec prints f ppf ls =
   let rec loop ppf = function
     | [] -> ()
     | [l] -> f ppf l
@@ -28,6 +28,6 @@ let rec print_t ppf = function
   | Bool -> fprintf ppf "Bool@?"
   | Array(t) -> fprintf ppf "Array(%a)@?" print_t t
   | Float -> fprintf ppf "Float@?"
-and print_ts ppf ts = print_ls print_t ppf ts
+and print_ts ppf ts = prints print_t ppf ts
 
 

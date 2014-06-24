@@ -56,8 +56,8 @@ type t =
   | Int of int
   | Add of t * t
   | Sub of t * t
-  | Print of t
   | Let of t * t
+  | Print of t
 ```
 
 ## parser.mly
@@ -163,6 +163,7 @@ open Parser
 ```
 let space = [' ' '\t' '\n' '\r']
 let digit = ['0'-'9']
+
 ```
 
 ruleに字句解析のルールを書きます。
@@ -209,8 +210,8 @@ module Syntax = struct
     | Int of int
     | Add of t * t
     | Sub of t * t
-    | Print of t
     | Let of t * t
+    | Print of t
 end
 ```
 
@@ -219,6 +220,11 @@ end
 ASTで書いていた所を消して、
 
 ```
+let compile output ast =
+  let k = KNormal.apply(ast) in
+  let vs = Virtual.apply(k) in
+  Emit.apply output vs
+
 open Syntax
 
 let _ =
@@ -228,6 +234,7 @@ let _ =
       Let(
         Print(Add(Int(2), Int(3))),
         Print(Sub(Add(Int(2), Int(3)), Int(2))))) in
+  compile "a.ll" ast;
 ```
 
 以下のように修正します。
@@ -237,9 +244,15 @@ let parse src =
   let lexbuf = Lexing.from_string src in
   Parser.exp Lexer.token lexbuf
 
+let compile output src =
+  let ast = parse src in
+  let k = KNormal.apply(ast) in
+  let vs = Virtual.apply(k) in
+  Emit.apply output vs
+
 let _ =
   let src = "print 1;print (2 + 3);print ((2+3)-2)" in
-  let ast = parse src in
+  compile "a.ll" src;
 ```
 
 パーサを使って文字列からコンパイルするように変更するわけです。
@@ -258,11 +271,8 @@ let _ =
     if !check then Printf.printf "test_error error %s\n" src else ()
 ```
 
-テストにパーサを追加します。
-
 ```
-    let ast = parse src in
-    let k = KNormal.apply(ast) in
+$ omake test
 ```
 
-omake testで問題なければ完成です。
+で問題なければ完成です。

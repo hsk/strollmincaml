@@ -16,7 +16,6 @@ let regt = function
   | RG (t,_) -> t
 
 type t =
-  | Print of r
   | Bin of r * string * r * r
   | Call of r * r * r list
   | Ret of r
@@ -46,9 +45,6 @@ let rec visit(env:r M.t)(c: Closure.t): r =
     | Closure.Let((aId,aT), bK, cK) ->
       let bR = visit env bK in
       visit (M.add aId bR env) (cK)
-    | Closure.Print(aId) ->
-      add(Print(M.find aId env));
-      RN(Type.Unit,"void")
     | Closure.Unit -> RN(Type.Unit, "void")
     | Closure.Var a ->
       M.find a env
@@ -56,6 +52,12 @@ let rec visit(env:r M.t)(c: Closure.t): r =
       let prmRs = List.map (fun prmId -> M.find prmId env ) prmIds in
       let nameR = M.find nameId env in
       let retR = RL(regt nameR, genid("..")) in
+      add(Call(retR, nameR, prmRs));
+      retR
+    | Closure.ExtFunApp(nameId, prmIds, t) ->
+      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+      let nameR = RG(t, nameId) in
+      let retR = RL(t, genid("..")) in
       add(Call(retR, nameR, prmRs));
       retR
 

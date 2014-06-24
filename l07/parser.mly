@@ -13,7 +13,6 @@ open Utils
 %token SEMICOLON
 %token LPAREN
 %token RPAREN
-%token PRINT
 %token EOF
 
 %right prec_let
@@ -55,9 +54,6 @@ exp:
     { App($1, $2) }
 | exp SEMICOLON exp
     { Let((genid(".."), Type.Unit), $1, $3) }
-| PRINT simple_exp
-    %prec prec_app
-    { Print($2) }
 | error
     { failwith
       (Printf.sprintf "parse error near characters %d-%d"

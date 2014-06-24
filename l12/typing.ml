@@ -48,7 +48,6 @@ let rec deref_term(e:t):t =
   | FDiv(e1, e2) -> FDiv(deref_term e1, deref_term e2)
   | FNeg(e) -> FNeg(deref_term e)
   | Let(xt, e1, e2) -> Let(deref_id_type(xt), deref_term(e1), deref_term(e2))
-  | Print e -> Print(deref_term(e))
   | LetRec({ name = xt; args = yts; body = e1 }, e2) ->
       LetRec({ name = deref_id_type xt;
          args = List.map deref_id_type yts;
@@ -145,9 +144,6 @@ let rec infer (env:Type.t M.t) (e:t):Type.t =
         (* println("free variable "+ x + " assumed as external "+a+"."+t)*)
         extenv := M.add x t !extenv;
         t
-      | Print(x) ->
-        let _ = infer env x in
-        Type.Unit
       | LetRec({ name = (x, t); args = yts; body = e1 }, e2) ->
         let env = M.add x t env in
         unify t (Type.Fun(List.map snd yts, infer (M.add_list yts env) e1));

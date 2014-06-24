@@ -10,7 +10,7 @@ let parse src =
   Parser.exp Lexer.token lexbuf
 
 let _ =
-  let src = "let a = (1.1,2) in let (b,c) = a in let d = b+.2.1-.0.1*.2.0/.1.2 in print(c)" in
+  let src = "let a = (1.1,2) in let (b,c) = a in let d = b+.2.1-.0.1*.2.0/.1.2 in print_float(d)" in
   let ast = parse src in
   fprintf std_formatter "ast=%a@." Syntax.print_t ast;
   let ast = Typing.apply(ast) in
@@ -24,5 +24,5 @@ let _ =
   Emit.apply "a.ll" v;
   fprintf std_formatter "emit ok@.";
   print_exec("llc a.ll -o a.s");
-  print_exec("llvm-gcc -m64 a.s");
+  print_exec("llvm-gcc -m64 a.s float.c");
   print_exec("./a.out")

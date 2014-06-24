@@ -6,19 +6,19 @@ type t =
   | Int of int
   | Add of string * string
   | Sub of string * string
-  | Print of string
   | Let of (string * Type.t) * t * t
   | Unit
   | Var of string
   | LetRec of fundef * t
   | App of string * string list
+  | ExtFunApp of string * string list * Type.t
   | Bool of bool
   | If of string * t * t
   | LE of string * string
   | Eq of string * string
   | Get of string * string
   | Put of string * string * string
-  | ExtFunApp of string * string list
+  | ExtArray of string * Type.t
 and fundef = {
   name : string * Type.t;
   args : (string * Type.t) list;
@@ -29,7 +29,6 @@ let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b
   | Sub(a,b) -> fprintf ppf "Sub(\"%s\",\"%s\")@?" a b
-  | Print(a) -> fprintf ppf "Print(\"%s\")@?" a
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)@?" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -39,13 +38,14 @@ let rec print_t ppf = function
       Syntax.print_sts sts
       print_t a print_t b
   | App(s,ss) -> fprintf ppf "App(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtFunApp(s,ss,t) -> fprintf ppf "ExtFunApp(\"%s\",[%s],%a)@?" s (String.concat "; " ss) Type.print_t t
   | Bool(b) ->  fprintf ppf "Bool(%b)@?" b
   | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
   | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
   | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
   | Get(a,b) -> fprintf ppf "Get(\"%s\",\"%s\")@?" a b
   | Put(a,b,c) -> fprintf ppf "Put(\"%s\",\"%s\",\"%s\")@?" a b c
-  | ExtFunApp(s,ss) -> fprintf ppf "ExtFunApp(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtArray(a,t) -> fprintf ppf "ExtArray(\"%s\",%a)@?" a Type.print_t t
 
 let insert_let (e, t) k = (* letを挿入する補助関数 (caml2html: knormal_insert) *)
   match e with
@@ -71,21 +71,32 @@ let rec visit(env:Type.t M.t)(e:Syntax.t):(t * Type.t) =
           (Sub(x, y), Type.Int)
         )
       )
-    | Syntax.Print(aE) ->
-      insert_let (visit env aE) (fun x ->
-        (Print x, Type.Unit)
-      )
     | Syntax.Let((x,t), e1, e2) ->
       let e1', t1 = visit env e1 in
       let e2', t2 = visit (M.add x t env) e2 in
       Let((x, t), e1', e2'), t2
-    | Syntax.Var(s) ->
-      Var(s), (M.find s env)
+    | Syntax.Var(x) when M.mem x env -> Var(x), M.find x env
+    | Syntax.Var(x) -> (* 外部配列の参照 (caml2html: knormal_extarray) *)
+      (match M.find x !Typing.extenv with
+      | Type.Array(_) as t -> ExtArray(x, t), t
+      | _ -> failwith (Printf.sprintf "external variable %s does not have an array type" x))
     | Syntax.LetRec({ Syntax.name = (x, t); Syntax.args = yts; Syntax.body = e1 }, e2) ->
       let env' = M.add x t env in
       let e2', t2 = visit env' e2 in
       let e1', t1 = visit (M.add_list yts env') e1 in
       LetRec({ name = (x, t); args = yts; body = e1' }, e2'), t2
+    | Syntax.App(Syntax.Var(f), e2s) when not (M.mem f env) ->
+      (* 外部関数の呼び出し (caml2html: knormal_extfunapp) *)
+        (match M.find f !Typing.extenv with
+        | Type.Fun(_, t) ->
+          let rec bind xs = function
+            (* "xs" are identifiers for the arguments *)
+            | [] -> ExtFunApp(f, xs, t), t
+            | e2 :: e2s ->
+              insert_let (visit env e2)
+                (fun x -> bind (xs @ [x]) e2s) in
+          bind [] e2s (* left-to-right evaluation *)
+        | _ -> assert false)
     | Syntax.App(e1, e2s) ->
       (match visit env e1 with
       | _, Type.Fun(_, t) as g_e1 ->
@@ -130,7 +141,7 @@ let rec visit(env:Type.t M.t)(e:Syntax.t):(t * Type.t) =
             match t2 with
             (*| Type.Float -> "create_float_array" *)
             | _ -> "create_array" in
-          ExtFunApp(l, [x; y]), Type.Array(t2)
+          ExtFunApp(l, [x; y], Type.Array(t2)), Type.Array(t2)
         )
       )
     | Syntax.Get(e1, e2) ->

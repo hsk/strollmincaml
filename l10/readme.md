@@ -16,7 +16,7 @@
   test("let a = (1,2) in let (b,c) = a in print(b); print(c)", "(1\n2\n,,0)");
 ```
 
-多値は(1,2)と言った形式で初期化して、let(b,c)=aのような形で取り出して使います。
+多値は`(1,2)`で初期化して、`let(b,c)=a`で取り出して使います。
 
 ## syntax.ml
 
@@ -44,7 +44,7 @@ print_tに以下を追加します:
 %token COMMA
 ```
 
-%right LESS_MINUSの下に以下の優先順位を追加します:
+%right LESS_MINUSの下にCOMMAの優先順位を追加します:
 
 ```
 %left COMMA
@@ -74,6 +74,7 @@ pat:
 | IDENT COMMA IDENT
     { [addtyp $1; addtyp $3] }
 ```
+
 の２つの構文要素を追加します。
 
 ## lexer.ml
@@ -127,6 +128,7 @@ inferに以下を追加します:
 ```
 
 ## kNormal.ml
+
 type tに以下を追加します:
 
 ```
@@ -232,6 +234,5 @@ visitに以下を追加します:
       in r
 ```
 
-## emit.ml
+omake omake testで問題なければ完了です。
 
-変更無し

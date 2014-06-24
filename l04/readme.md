@@ -62,8 +62,8 @@ let gentyp () = Var(ref None) (* 新しい型変数を作る *)
 パーサの先頭部分に、addtyp関数を追加します。
 
 ```
-let addtyp x = (x, Type.gentyp ())
 open Utils
+let addtyp x = (x, Type.gentyp ())
 ```
 
 トークンを追加します。
@@ -182,7 +182,7 @@ module Typing = struct
     | Add(e1, e2) -> Add(deref_term(e1), deref_term(e2))
     | Sub(e1, e2) -> Sub(deref_term(e1), deref_term(e2))
     | Let(xt, e1, e2) -> Let(deref_id_type(xt), deref_term(e1), deref_term(e2))
-    | Print e -> Print(deref_term(e))
+    | Print(e) -> Print(deref_term(e))
     | Unit | Var _ | Int _ -> e
 
   (* 単一化 *)
@@ -263,13 +263,10 @@ module Typing = struct
     deref_term(e)
 
 end
-
 ```
 
 ## KNormal
 
-
-TODO: これ以降の文章を見直す。
 
 type tの以下の箇所
 
@@ -299,6 +296,8 @@ insert_let関数を追加します:
 
 visitにenvの引数を追加し、返り値もType.tも返すようにします:
 
+TODO: 外部配列の参照に付いて説明する。
+
 ```
   let rec visit(env:Type.t M.t)(e:Syntax.t):(t * Type.t) =
     match e with
@@ -324,8 +323,9 @@ visitにenvの引数を追加し、返り値もType.tも返すようにします
         let e1', t1 = visit env e1 in
         let e2', t2 = visit (M.add x t env) e2 in
         Let((x, t), e1', e2'), t2
-      | Syntax.Var(s) ->
-        Var(s), (M.find s env)
+      | Syntax.Var(x) when M.mem x env -> Var(x), M.find x env
+      | Syntax.Var(x) -> (* 外部配列の参照 (caml2html: knormal_extarray) *)
+        failwith (Printf.sprintf "external variable %s does not have an array type" x)
 ```
 
 applyのvisitの呼び出しも修正します:
@@ -379,8 +379,8 @@ binやvisitも型が付いた状態にします。
         visit (M.add aId bR env) (cK)
       | KNormal.Print(aId) ->
         add(Print(M.find aId env));
-        RN(Type.Unit,"void")
-      | KNormal.Unit -> RN(Type.Unit, "void")
+        RN(Type.Unit,"0")
+      | KNormal.Unit -> RN(Type.Unit, "0")
       | KNormal.Var a ->
         M.find a env
 
@@ -393,14 +393,14 @@ binやvisitも型が付いた状態にします。
 
 ## Emit
 
-pを変更
+pも型に対応して変更します:
 
 ```
       | RL(_,id) -> "%" ^ id
       | RN(_,id) -> id
 ```
 
-型の出力ptとrの型出力ptr,型と名前両方出力するprを追加。
+型の出力を行うptとrの型を出力するptr,型と名前両方出力するprを追加します:
 
 ```
   let pt(t:Type.t): string =
@@ -418,7 +418,7 @@ pを変更
     ptr r ^ " " ^ p r
 ```
 
-emitはこんなかんじ
+emitも型に対応します:
 
 ```
   let emit(v: t) =
@@ -426,13 +426,30 @@ emitはこんなかんじ
       | Bin(id, op, a, b) ->
         asm_p(p(id) ^ " = " ^ op ^ " " ^ pr a ^ ", " ^ p(b))
       | Print(a) ->
-        asm_p("call void @print_l(" ^ pr a ^ ") nounwind ssp")
+        asm_p("call i64 @print(" ^ pr a ^ ") nounwind ssp")
 ```
 
-## メイン
+## メインの処理
 
-letが使えるテスト
+compileのparseの後ろに、型推論の処理を追加します:
+
+```
+  let ast = parse src in
+  let ast = Typing.apply(ast) in
+```
+
+letが使えるテストに書き換えます:
 
 ```
   let src = "print 1;print (2 + 3);print ((2+3)-2); let a = 1+2 in print a" in
+```
+
+テストして問題なければ完了です:
+
+```
+$ omake
+```
+
+```
+$ omake test
 ```

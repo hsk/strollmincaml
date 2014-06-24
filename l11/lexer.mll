@@ -38,8 +38,6 @@ rule token = parse
     { PLUS }
 | ';'
     { SEMICOLON }
-| "print"
-    { PRINT }
 | "let"
     { LET }
 | "rec"

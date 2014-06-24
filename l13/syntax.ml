@@ -9,7 +9,6 @@ type t =
   | FMul of t * t
   | FDiv of t * t
   | FNeg of t
-  | Print of t
   | Let of (string * Type.t) * t * t
   | Unit
   | Var of string
@@ -41,7 +40,6 @@ let rec print_t ppf = function
   | FMul(a,b) -> fprintf ppf "FMul(%a,%a)@?" print_t a print_t b
   | FDiv(a,b) -> fprintf ppf "FDiv(%a,%a)@?" print_t a print_t b
   | FNeg(a) -> fprintf ppf "FNeg(%a)@?" print_t a
-  | Print(a) -> fprintf ppf "Print(%a)@?" print_t a
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -64,5 +62,5 @@ let rec print_t ppf = function
 
 and print_st ppf = function
   | (s,t) -> fprintf ppf "(\"%s\",%a)" s Type.print_t t
-and print_sts ppf ls = Type.print_ls print_st ppf ls
-and print_ts ppf ls = Type.print_ls print_t ppf ls
+and print_sts ppf ls = Type.prints print_st ppf ls
+and print_ts ppf ls = Type.prints print_t ppf ls

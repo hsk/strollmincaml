@@ -5,7 +5,7 @@ _main:                                  ## @main
 ## BB#0:                                ## %entry
 	pushq	%rax
 	movl	$1, %edi
-	callq	_print_l
+	callq	_print
 	xorl	%eax, %eax
 	popq	%rdx
 	ret

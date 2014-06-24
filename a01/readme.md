@@ -19,12 +19,12 @@ print 1
 a.llファイルを新規に作成して、以下の内容をコピー＆ペーストして保存してみましょう。
 
 ```
-define i32 @main() nounwind ssp {
+define i64 @main() nounwind ssp {
 entry:
-  call void @print_l(i64 1)
-  ret i32 0
+  call i64 @print(i64 1)
+  ret i64 0
 }
-declare void @print_l(i64 %a)
+declare void @print(i64 %a)
 ```
 
 それでは、a.llをllcを使ってアセンブラに変換してみましょう。
@@ -43,7 +43,7 @@ _main:                                  ## @main
 ## BB#0:                                ## %entry
 	pushq	%rax
 	movl	$1, %edi
-	callq	_print_l
+	callq	_print
 	xorl	%eax, %eax
 	popq	%rdx
 	ret
@@ -54,7 +54,7 @@ _main:                                  ## @main
 
 内容は環境に寄って変わるので、必ずこうなるとは限りません。それでも、出力されていれば成功です。
 
-a.sを実行するには、print_l関数が必要です。
+a.sを実行するには、print関数が必要です。
 
 ## lib.c
 
@@ -62,7 +62,7 @@ lib.cを新規に作成し、以下の内容を記述してください。
 
 ```
 #include <stdio.h>
-void print_l(long l) {
+void print(long l) {
   printf("%l\n", l);
 }
 ```

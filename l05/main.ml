@@ -42,7 +42,6 @@ module Typing = struct
     | Add(e1, e2) -> Add(deref_term(e1), deref_term(e2))
     | Sub(e1, e2) -> Sub(deref_term(e1), deref_term(e2))
     | Let(xt, e1, e2) -> Let(deref_id_type(xt), deref_term(e1), deref_term(e2))
-    | Print e -> Print(deref_term(e))
     | LetRec({ name = xt; args = yts; body = e1 }, e2) ->
         LetRec({ name = deref_id_type xt;
            args = List.map deref_id_type yts;
@@ -108,9 +107,6 @@ module Typing = struct
           (* println("free variable "+ x + " assumed as external "+a+"."+t)*)
           extenv := M.add x t !extenv;
           t
-        | Print(x) ->
-          let _ = infer env x in
-          Type.Unit
         | LetRec({ name = (x, t); args = yts; body = e1 }, e2) ->
           let env = M.add x t env in
           unify t (Type.Fun(List.map snd yts, infer (M.add_list yts env) e1));
@@ -152,12 +148,12 @@ module KNormal = struct
     | Int of int
     | Add of string * string
     | Sub of string * string
-    | Print of string
     | Let of (string * Type.t) * t * t
     | Unit
     | Var of string
     | LetRec of fundef * t
     | App of string * string list
+    | ExtFunApp of string * string list * Type.t
   and fundef = {
     name : string * Type.t;
     args : (string * Type.t) list;
@@ -187,21 +183,30 @@ module KNormal = struct
             (Sub(x, y), Type.Int)
           )
         )
-      | Syntax.Print(aE) ->
-        insert_let (visit env aE) (fun x ->
-          (Print x, Type.Unit)
-        )
       | Syntax.Let((x,t), e1, e2) ->
         let e1', t1 = visit env e1 in
         let e2', t2 = visit (M.add x t env) e2 in
         Let((x, t), e1', e2'), t2
-      | Syntax.Var(s) ->
-        Var(s), (M.find s env)
+      | Syntax.Var(x) when M.mem x env -> Var(x), M.find x env
+      | Syntax.Var(x) -> (* 外部配列の参照 (caml2html: knormal_extarray) *)
+        failwith (Printf.sprintf "external variable %s does not have an array type" x)
       | Syntax.LetRec({ Syntax.name = (x, t); Syntax.args = yts; Syntax.body = e1 }, e2) ->
         let env' = M.add x t env in
         let e2', t2 = visit env' e2 in
         let e1', t1 = visit (M.add_list yts env') e1 in
         LetRec({ name = (x, t); args = yts; body = e1' }, e2'), t2
+      | Syntax.App(Syntax.Var(f), e2s) when not (M.mem f env) ->
+        (* 外部関数の呼び出し (caml2html: knormal_extfunapp) *)
+          (match M.find f !Typing.extenv with
+          | Type.Fun(_, t) ->
+            let rec bind xs = function
+              (* "xs" are identifiers for the arguments *)
+              | [] -> ExtFunApp(f, xs, t), t
+              | e2 :: e2s ->
+                insert_let (visit env e2)
+                  (fun x -> bind (xs @ [x]) e2s) in
+            bind [] e2s (* left-to-right evaluation *)
+          | _ -> assert false)
       | Syntax.App(e1, e2s) ->
         (match visit env e1 with
         | _, Type.Fun(_, t) as g_e1 ->
@@ -234,7 +239,7 @@ module Closure = struct
     | Let of (string * Type.t) * t * t
     | Var of string
     | AppDir of string * string list
-    | Print of string
+    | ExtFunApp of string * string list * Type.t
   type fundef = {
     name : string * Type.t;
     args : (string * Type.t) list;
@@ -260,7 +265,7 @@ module Closure = struct
       toplevel := {name=(x, t); args=yts; body=visit e1 } :: !toplevel;
       visit e2
     | KNormal.App(x, ys) -> AppDir(x, ys)
-    | KNormal.Print(x) -> Print(x)
+    | KNormal.ExtFunApp(x, ys, t) -> ExtFunApp(x, ys, t)
 
   (**
    * クロージャ変換
@@ -290,7 +295,6 @@ module Virtual = struct
     | RG (t,_) -> t
 
   type t =
-    | Print of r
     | Bin of r * string * r * r
     | Call of r * r * r list
     | Ret of r
@@ -320,9 +324,6 @@ module Virtual = struct
       | Closure.Let((aId,aT), bK, cK) ->
         let bR = visit env bK in
         visit (M.add aId bR env) (cK)
-      | Closure.Print(aId) ->
-        add(Print(M.find aId env));
-        RN(Type.Unit,"void")
       | Closure.Unit -> RN(Type.Unit, "void")
       | Closure.Var a ->
         M.find a env
@@ -330,6 +331,12 @@ module Virtual = struct
         let prmRs = List.map (fun prmId -> M.find prmId env ) prmIds in
         let nameR = M.find nameId env in
         let retR = RL(regt nameR, genid("..")) in
+        add(Call(retR, nameR, prmRs));
+        retR
+      | Closure.ExtFunApp(nameId, prmIds, t) ->
+        let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+        let nameR = RG(t, nameId) in
+        let retR = RL(t, genid("..")) in
         add(Call(retR, nameR, prmRs));
         retR
 
@@ -376,7 +383,7 @@ module Emit = struct
   let rec pt(t:Type.t): string =
     match t with
     | Type.Int -> "i64"
-    | Type.Unit -> "i32"
+    | Type.Unit -> "i64"
     | Type.Fun(ts,t) -> pt t ^ "(" ^ String.concat ", " (List.map pt ts) ^ ")*"
     | Type.Tuple(ts) -> "{" ^ String.concat ", " (List.map pt ts) ^ "}"
     | Type.Var _ -> assert false
@@ -394,8 +401,6 @@ module Emit = struct
     match v with
       | Bin(id, op, a, b) ->
         asm_p(p(id) ^ " = " ^ op ^ " " ^ pr a ^ ", " ^ p(b))
-      | Print(a) ->
-        asm_p("call void @print_l(" ^ pr a ^ ") nounwind ssp")
       | Call(id, r, prms) ->
         let ps = String.concat ", " (List.map pr prms) in
         (match regt id with
@@ -407,7 +412,7 @@ module Emit = struct
       | Ret(a) ->
         (match regt a with
           | Type.Unit ->
-            asm_p("ret i32 0")
+            asm_p("ret i64 0")
           | _ ->
             asm_p("ret " ^ pr(a))
         )
@@ -427,13 +432,13 @@ module Emit = struct
 
 
     asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
-    asm("define void @print_l(i64 %a) nounwind ssp {");
+    asm("define i64 @print(i64 %a) nounwind ssp {");
     asm("entry:");
     asm_p("%a_addr = alloca i64, align 8");
     asm_p("store i64 %a, i64* %a_addr");
     asm_p("%0 = load i64* %a_addr, align 8");
     asm_p("%1 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([5 x i8]* @.str, i64 0, i64 0), i64 %0) nounwind");
-    asm_p("ret void");
+    asm_p("ret i64 0");
     asm("}");
     asm("declare i32 @printf(i8*, ...) nounwind");
     asm_close()

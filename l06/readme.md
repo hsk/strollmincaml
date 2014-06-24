@@ -77,3 +77,7 @@ open Utils
 ```
 open Utils
 ```
+
+omake omake testで問題なければ完了です。
+
+

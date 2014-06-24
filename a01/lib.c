@@ -1,4 +1,4 @@
 #include <stdio.h>
-void print_l(long l) {
+void print(long l) {
   printf("%l\n", l);
 }

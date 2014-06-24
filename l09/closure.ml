@@ -11,14 +11,14 @@ type t = (* クロージャ変換後の式 (caml2html: closure_t) *)
   | MakeCls of (string * Type.t) * closure * t
   | AppCls of string * string list
   | AppDir of string * string list
-  | Print of string
+  | ExtFunApp of string * string list * Type.t
   | Bool of bool
   | If of string * t * t
   | LE of string * string
   | Eq of string * string
   | Get of string * string
   | Put of string * string * string
-  | ExtFunApp of string * string list
+  | ExtArray of string * Type.t
 
 type fundef = {
   name : string * Type.t;
@@ -32,7 +32,6 @@ let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b
   | Sub(a,b) -> fprintf ppf "Sub(\"%s\",\"%s\")@?" a b
-  | Print(a) -> fprintf ppf "Print(\"%s\")@?" a
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)@?" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -44,13 +43,14 @@ let rec print_t ppf = function
       print_t b
   | AppCls(s,ss) -> fprintf ppf "AppCls(\"%s\",[%s])@?" s (String.concat "; " ss)
   | AppDir(s,ss) -> fprintf ppf "AppDir(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtFunApp(s,ss,t) -> fprintf ppf "ExtFunApp(\"%s\",[%s],%a)@?" s (String.concat "; " ss) Type.print_t t
   | Bool(b) -> fprintf ppf "Bool(%b)@?" b
   | If(s,a,b) -> fprintf ppf "If(\"%s\",%a,%a)" s print_t a print_t b
   | Eq(a,b) -> fprintf ppf "Eq(\"%s\",\"%s\")@?" a b
   | LE(a,b) -> fprintf ppf "LE(\"%s\",\"%s\")@?" a b
   | Get(a,b) -> fprintf ppf "Get(\"%s\",\"%s\")@?" a b
   | Put(a,b,c) -> fprintf ppf "Put(\"%s\",\"%s\",\"%s\")@?" a b c
-  | ExtFunApp(s,ss) -> fprintf ppf "ExtFunApp(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtArray(a,t) -> fprintf ppf "ExtArray(\"%s\",%a)@?" a Type.print_t t
   
 let print_fundef ppf = function
 | {name=(s,t);args=sts;formal_fv=zts;body=b} ->
@@ -59,7 +59,7 @@ let print_fundef ppf = function
     Syntax.print_sts sts
     Syntax.print_sts zts
     print_t b
-let print_fundefs ppf ls = Type.print_ls print_fundef ppf ls
+let print_fundefs ppf ls = Type.prints print_fundef ppf ls
 let print_prog ppf = function
 | Prog(fundefs,t) -> fprintf ppf "Prog(%a,%a)" print_fundefs fundefs print_t t
 (**
@@ -78,15 +78,13 @@ let rec freeVar (e:t): S.t =
     | MakeCls((x, t), { entry = l; actual_fv = ys }, e) -> S.remove x (S.union (S.of_list ys) (freeVar e))
     | AppCls(x, ys) -> S.of_list (x :: ys)
     | AppDir(_, xs) -> S.of_list xs
-    | Print(x) -> S.singleton x
+    | ExtFunApp(_, xs, _) -> S.of_list xs
     | Bool(_) -> S.empty
     | Eq(x, y) | LE(x, y) -> S.of_list [x; y]
     | If(x, a, b) -> S.add x (S.union (freeVar a) (freeVar b))
     | Get(x, y) -> S.of_list [x; y]
     | Put(x, y, z) -> S.of_list [x; y; z]
-    | ExtFunApp(_, xs) -> S.of_list xs
-
-
+    | ExtArray(_,_) -> S.empty
 let toplevel: fundef list ref = ref []
 let stack:fundef list list ref = ref []
 let push (c:fundef list) = 
@@ -176,15 +174,14 @@ let rec visit(env:Type.t M.t) (known: S.t) (e:KNormal.t):t =
     )
   | KNormal.App(x, ys) ->
     if S.mem x known then AppDir(x, ys) else AppCls(x, ys)
-  | KNormal.Print(x) -> Print(x)
+  | KNormal.ExtFunApp(x, ys, t) -> ExtFunApp(x, ys, t)
   | KNormal.Bool(b) -> Bool(b)
   | KNormal.If(x, e1, e2) -> If(x, visit env known e1, visit env known e2)
   | KNormal.Eq(e1, e2) -> Eq(e1, e2)
   | KNormal.LE(e1, e2) -> LE(e1, e2)
   | KNormal.Get(x, y) -> Get(x, y)
   | KNormal.Put(x, y, z) -> Put(x, y, z)
-  | KNormal.ExtFunApp(x, ys) -> (*AppDir("min_caml_" ^ x, ys)*)
-     ExtFunApp(x,ys)
+  | KNormal.ExtArray(x, t) -> ExtArray(x, t)
 
 (**
  * クロージャ変換

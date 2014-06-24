@@ -1,6 +1,6 @@
-define i32 @main() nounwind ssp {
+define i64 @main() nounwind ssp {
 entry:
-  call void @print_l(i64 1)
-  ret i32 0
+  call i64 @print(i64 1)
+  ret i64 0
 }
-declare void @print_l(i64 %a)
+declare void @print(i64 %a)

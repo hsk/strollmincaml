@@ -28,5 +28,5 @@ let _ =
   Emit.apply "a.ll" v;
   fprintf std_formatter "emit ok@.";
   print_exec("llc a.ll -o a.s");
-  print_exec("llvm-gcc -m64 a.s");
+  print_exec("llvm-gcc -m64 a.s float.c");
   print_exec("./a.out")

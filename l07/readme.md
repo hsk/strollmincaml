@@ -9,18 +9,6 @@
   test("let rec f x = let rec e y = x + y in print (e 1) in f 2","(3\n,,0)");
 ```
 
-ソースの先頭にopen Formatを追加します。
-```
-open Format
-```
-
-Typing.apply前に加えます:
-
-```
-    fprintf std_formatter "ast=%a@." Syntax.print_t ast;
-```
-
-
 ## kNormal.ml
 
 テスト用にプリンターを追加します:
@@ -31,7 +19,6 @@ let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b
   | Sub(a,b) -> fprintf ppf "Sub(\"%s\",\"%s\")@?" a b
-  | Print(a) -> fprintf ppf "Print(\"%s\")@?" a
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)@?" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -41,6 +28,7 @@ let rec print_t ppf = function
       Syntax.print_sts sts
       print_t a print_t b
   | App(s,ss) -> fprintf ppf "App(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtFunApp(s,ss,t) -> fprintf ppf "ExtFunApp(\"%s\",[%s],%a)@?" s (String.concat "; " ss) Type.print_t t
 
 ```
 
@@ -66,7 +54,6 @@ let rec print_t ppf = function
   | Int i -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(\"%s\",\"%s\")@?" a b
   | Sub(a,b) -> fprintf ppf "Sub(\"%s\",\"%s\")@?" a b
-  | Print(a) -> fprintf ppf "Print(\"%s\")@?" a
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)@?" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -78,6 +65,7 @@ let rec print_t ppf = function
       print_t b
   | AppCls(s,ss) -> fprintf ppf "AppCls(\"%s\",[%s])@?" s (String.concat "; " ss)
   | AppDir(s,ss) -> fprintf ppf "AppDir(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtFunApp(s,ss,t) -> fprintf ppf "ExtFunApp(\"%s\",[%s],%a)@?" s (String.concat "; " ss) Type.print_t t
 
 let print_fundef ppf = function
 | {name=(s,t);args=sts;formal_fv=zts;body=b} ->
@@ -86,7 +74,7 @@ let print_fundef ppf = function
     Syntax.print_sts sts
     Syntax.print_sts zts
     print_t b
-let print_fundefs ppf ls = Type.print_ls print_fundef ppf ls
+let print_fundefs ppf ls = Type.prints print_fundef ppf ls
 let print_prog ppf = function
 | Prog(fundefs,t) -> fprintf ppf "Prog(%a,%a)" print_fundefs fundefs print_t t
 ```
@@ -110,7 +98,7 @@ let rec freeVar (e:t): S.t =
     | MakeCls((x, t), { entry = l; actual_fv = ys }, e) -> S.remove x (S.union (S.of_list ys) (freeVar e))
     | AppCls(x, ys) -> S.of_list (x :: ys)
     | AppDir(_, xs) -> S.of_list xs
-    | Print(x) -> S.singleton x
+    | ExtFunApp(_, xs, _) -> S.of_list xs
 ```
 
 さらに、fundefのスタックを作り、pushとpopも作ります。
@@ -207,7 +195,7 @@ Let,LetRec,Appは全面的に書き換えます。
 applyもvisitの引数に対応します。
 
 ```
-let apply(e:KNormal.t): prog =
+let apply (e:KNormal.t): prog =
   toplevel := [];
   let e = visit M.empty S.empty e in
   Prog(List.rev !toplevel, e)
@@ -222,14 +210,9 @@ type tに以下を追加します:
   | ExtractValue of r * r * int
 ```
 
-visitのPrint,UnitのRNの値は"0"にします。
-また、Varの箇所にエラー時のエラー出力を追加します:
+Varの箇所にエラー時のエラー出力を追加します:
 
 ```
-    | Closure.Print(aId) ->
-      add(Print(M.find aId env));
-      RN(Type.Unit,"0")
-    | Closure.Unit -> RN(Type.Unit, "0")
     | Closure.Var a ->
       (try
         M.find a env
@@ -239,7 +222,7 @@ visitのPrint,UnitのRNの値は"0"にします。
       )
 ```
 
-visitのAppDirを書き換えMakeCls,AppClsも追加します:
+visitのAppDirとExtFunAppを書き換えMakeCls,AppClsも追加します:
 
 ```
     | Closure.AppDir(nameId, prmIds) ->
@@ -253,7 +236,12 @@ visitのAppDirを書き換えMakeCls,AppClsも追加します:
         Not_found ->
           failwith ("not found appdir "^ nameId)
       )
-
+    | Closure.ExtFunApp(nameId, prmIds, t) ->
+      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+      let nameR = RG(t, nameId) in
+      let retR = RL(t, genid("..")) in
+      add(Call(retR, nameR, prmRs));
+      retR
     (* クロージャ生成 *)
     | Closure.MakeCls(
       (nameId, Type.Fun(funParamTs, funRetT)),
@@ -325,10 +313,10 @@ visitfun formal_fvが増えたのでそれの対応をします。
 
 ```
 let visitfun env {
-    Closure.name = (x, t); 
-    Closure.args = yts;
-    Closure.formal_fv = zts;
-    Closure.body = e } =
+  Closure.name = (x, t); 
+  Closure.args = yts;
+  Closure.formal_fv = zts;
+  Closure.body = e } =
   vs := [];
   match t with
   | Type.Fun(_, t) ->
@@ -377,4 +365,6 @@ knormalとclosureの変換結果を出力します:
 ```
   fprintf std_formatter "closure %a@." Closure.print_prog c;
 ```
+
+omake omake testで問題なければ完了です。
 

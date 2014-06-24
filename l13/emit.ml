@@ -12,7 +12,7 @@ let rec pt(t:Type.t): string =
   | Type.Bool -> "i1"
   | Type.Int -> "i64"
   | Type.Float -> "double"
-  | Type.Unit -> "i32"
+  | Type.Unit -> "i64"
   | Type.Fun(ts,t) -> pt t ^ "(" ^ String.concat ", " (List.map pt ts) ^ ")*"
   | Type.Tuple(ts) -> "{" ^ String.concat ", " (List.map pt ts) ^ "}"
   | Type.Array(t) -> pt t ^ "*"
@@ -43,9 +43,6 @@ let emit(v: t) =
       | _ ->
         asm_p(p(id) ^ " = " ^ op ^ " " ^ pr a ^ ", " ^ p(b))
       )
-    | Print(a) ->
-      asm_p("call void @print_l(" ^ pr a ^ ") nounwind ssp")
-
     | Call(tail, id, r, prms) ->
       let tail = if tail then "tail " else "" in
       let ps = String.concat ", " (List.map pr prms) in
@@ -62,7 +59,7 @@ let emit(v: t) =
     | Ret(a) ->
       (match regt a with
         | Type.Unit ->
-          asm_p("ret i32 0")
+          asm_p("ret i64 0")
         | _ ->
           asm_p("ret " ^ pr(a))
       )
@@ -105,13 +102,13 @@ let apply(file: string) (Prog(fundefs)):unit =
 
 
   asm("@.str = private constant [5 x i8] c\"%ld\\0A\\00\"");
-  asm("define void @print_l(i64 %a) nounwind ssp {");
+  asm("define i64 @print(i64 %a) nounwind ssp {");
   asm("entry:");
   asm_p("%a_addr = alloca i64, align 8");
   asm_p("store i64 %a, i64* %a_addr");
   asm_p("%0 = load i64* %a_addr, align 8");
   asm_p("%1 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([5 x i8]* @.str, i64 0, i64 0), i64 %0) nounwind");
-  asm_p("ret void");
+  asm_p("ret i64 0");
   asm("}");
   asm("declare i32 @printf(i8*, ...) nounwind");
 

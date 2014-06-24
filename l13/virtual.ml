@@ -17,7 +17,6 @@ let regt = function
   | RG (t,_) -> t
 
 type t =
-  | Print of r
   | Bin of r * string * r * r
   | Call of bool * r * r * r list
   | InsertValue of r * r * r * int
@@ -44,7 +43,6 @@ let vs :t list ref = ref []
 
 let add (v:t): unit =
   vs := v :: !vs
-
 
 let bin env op x y =
   let rx = M.find x env in
@@ -102,9 +100,6 @@ let rec visit(env:r M.t)(c: Closure.t): r =
     | Closure.Let((aId,aT), bK, cK) ->
       let bR = visit env bK in
       visit (M.add aId bR env) (cK)
-    | Closure.Print(aId) ->
-      add(Print(M.find aId env));
-      RN(Type.Unit,"0")
     | Closure.Unit -> RN(Type.Unit, "0")
     | Closure.Var a ->
       (try
@@ -115,6 +110,12 @@ let rec visit(env:r M.t)(c: Closure.t): r =
       )
     | Closure.AppDir(nameId, prmIds) ->
       app_dir env false nameId prmIds
+    | Closure.ExtFunApp(nameId, prmIds, t) ->
+      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+      let nameR = RG(t, nameId) in
+      let retR = RL(t, genid("..")) in
+      add(Call(false, retR, nameR, prmRs));
+      retR
 
     (* クロージャ生成 *)
     | Closure.MakeCls(
@@ -183,16 +184,7 @@ let rec visit(env:r M.t)(c: Closure.t): r =
           fprintf str_formatter "x=%s t=%a" x Type.print_t t;
           failwith (flush_str_formatter())
       )
-    | Closure.ExtFunApp(nameId, prmIds) ->
-      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
-      let nameR = M.find nameId env in
-      (match regt nameR with
-        | Type.Fun(l,t) ->
-          let retR = RL(t, genid("..")) in
-          add(Call(false, retR, nameR, prmRs));
-          retR
-        | t -> failwith("type error")
-      )
+    | Closure.ExtArray(x, t) -> RG(t, "min_caml_" ^ x)
     | Closure.LetTuple (atl, a, e) ->
       let env = let_tuple env false atl a in
       visit env e
@@ -286,6 +278,13 @@ and visit_tail env e =
       visit_tail (M.add id v env) e2
   | Closure.AppDir(nameId, prmIds) ->
     let retR = app_dir env true nameId prmIds in
+    add(Ret(retR));
+    retR
+  | Closure.ExtFunApp(nameId, prmIds, t) ->
+    let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+    let nameR = RG(t, nameId) in
+    let retR = RL(t, genid("..")) in
+    add(Call(true, retR, nameR, prmRs));
     add(Ret(retR));
     retR
   (* クロージャ実行 *)

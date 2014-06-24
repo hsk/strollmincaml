@@ -1,6 +1,8 @@
 # 配列
 
-MinCamlの配列は配列のポインタを持って回る形式になっています。
+MinCamlの配列は配列のポインタを持って回る作りです。
+Array.createで長さと初期値を指定して配列を作成し、
+初期値が必ず入っている配列を準備して使います。
 
 ## test.ml
 
@@ -22,7 +24,7 @@ Array.createで作成し、a.(1)等でアクセスします。
 
 ## type.ml
 
-type t に以下を追加します。
+type t のFunの下に以下を追加します。
 
 ```
   | Array of t
@@ -87,6 +89,8 @@ expに以下を追加します。
 
 ## lexer.mll
 
+字句解析のルールに以下を追加します:
+
 ```
 | "Array.create" (* [XX] ad hoc *)
     { ARRAY_CREATE }
@@ -149,7 +153,7 @@ type tに以下を追加します:
 ```
   | Get of string * string
   | Put of string * string * string
-  | ExtFunApp of string * string list
+  | ExtArray of string * Type.t
 ```
 
 print_tに以下を追加します:
@@ -157,7 +161,18 @@ print_tに以下を追加します:
 ```
   | Get(a,b) -> fprintf ppf "Get(\"%s\",\"%s\")@?" a b
   | Put(a,b,c) -> fprintf ppf "Put(\"%s\",\"%s\",\"%s\")@?" a b c
-  | ExtFunApp(s,ss) -> fprintf ppf "ExtFunApp(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtArray(s,t) -> fprintf ppf "ExtArray(\"%s\",%a)@?" s Type.print_t t
+```
+
+visitのSyntax.Varの箇所を外部配列の参照が出来るように修正します:
+
+TODO:テスト
+
+```
+    | Syntax.Var(x) -> (* 外部配列の参照 (caml2html: knormal_extarray) *)
+      (match M.find x !Typing.extenv with
+      | Type.Array(_) as t -> ExtArray(x, t), t
+      | _ -> failwith (Printf.sprintf "external variable %s does not have an array type" x))
 ```
 
 visitに以下を追加します:
@@ -171,7 +186,7 @@ visitに以下を追加します:
             match t2 with
             (*| Type.Float -> "create_float_array" *)
             | _ -> "create_array" in
-          ExtFunApp(l, [x; y]), Type.Array(t2)
+          ExtFunApp(l, [x; y], Type.Array(t2)), Type.Array(t2)
         )
       )
     | Syntax.Get(e1, e2) ->
@@ -200,7 +215,7 @@ type tに以下を追加します:
 ```
   | Get of string * string
   | Put of string * string * string
-  | ExtFunApp of string * string list
+  | ExtArray of string * Type.t
 ```
 
 print_tに以下を追加します:
@@ -208,7 +223,7 @@ print_tに以下を追加します:
 ```
   | Get(a,b) -> fprintf ppf "Get(\"%s\",\"%s\")@?" a b
   | Put(a,b,c) -> fprintf ppf "Put(\"%s\",\"%s\",\"%s\")@?" a b c
-  | ExtFunApp(s,ss) -> fprintf ppf "ExtFunApp(\"%s\",[%s])@?" s (String.concat "; " ss)
+  | ExtArray(s,t) -> fprintf ppf "ExtArray(\"%s\",%a)@?" s Type.print_t t
 ```
 
 freeVarsに以下を追加します:
@@ -216,7 +231,7 @@ freeVarsに以下を追加します:
 ```
     | Get(x, y) -> S.of_list [x; y]
     | Put(x, y, z) -> S.of_list [x; y; z]
-    | ExtFunApp(_, xs) -> S.of_list xs
+    | ExtArray(_,_) -> S.empty
 ```
 
 visitに以下を追加します:
@@ -224,8 +239,7 @@ visitに以下を追加します:
 ```
   | KNormal.Get(x, y) -> Get(x, y)
   | KNormal.Put(x, y, z) -> Put(x, y, z)
-  | KNormal.ExtFunApp(x, ys) -> (*AppDir("min_caml_" ^ x, ys)*)
-     ExtFunApp(x,ys)
+  | KNormal.ExtArray(x, t) -> ExtArray(x, t)
 ```
 
 ## virtual.ml
@@ -272,47 +286,12 @@ visitに以下を追加します:
           fprintf str_formatter "x=%s t=%a" x Type.print_t t;
           failwith (flush_str_formatter())
       )
-    | Closure.ExtFunApp(nameId, prmIds) ->
-      let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
-      let nameR = M.find nameId env in
-      (match regt nameR with
-        | Type.Fun(l,t) ->
-          let retR = RL(t, genid("..")) in
-          add(Call(retR, nameR, prmRs));
-          retR
-        | t -> failwith("type error")
-      )
+    | Closure.ExtArray(x, t) -> RG(t, "min_caml_" ^ x)
 ```
-
-applyにいくつか変更をします。
-
-fold_leftに渡す環境が空だったのだが、create_arrayを環境に入れます。
-
-```
-      (M.empty, [])
-```
-
-を
-
-```
-  let env = M.add
-    "create_array"
-    (RG(Type.Fun([Type.Int;Type.Int],Type.Array(Type.Int)),"create_array"))
-    M.empty
-  in
-```
-
-として、環境を作り
-
-```
-      (env, [])
-```
-
-として呼び出します。
 
 ## emit.ml
 
-ptにArray型を追加します:
+ptにのFunの下にArray型を追加します:
 
 ```
   | Type.Array(t) -> pt t ^ "*"
@@ -352,5 +331,8 @@ applyにcreate_arrayの実装を追加し、mallocの定義も追加します:
   asm("end:");
   asm_p("ret i64* %mem");
   asm("}");
+
   asm("declare i8* @malloc(i64)");
 ```
+
+omake omake testが通れば完了です。

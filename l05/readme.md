@@ -27,21 +27,6 @@ let test(src, expected) =
   Printf.printf "compile %s\n" src;
 ```
 
-パーサの後ろに型推論を追加し、クロージャ変換を追加します。
-Virtualの結果はリストではなくなっているので、いちおvsをvにしましょう。
-結局test関数の先頭部分は以下のようになります:
-```
-let test(src, expected) =
-  Printf.printf "compile %s\n" src;
-  let f src =
-    let ast = parse src in
-    let ast = Typing.apply(ast) in
-    let k = KNormal.apply(ast) in
-    let c = Closure.apply(k) in
-    let v = Virtual.apply(c) in
-    Emit.apply "a.ll" v;
-```
-
 ## OMakefile
 
 mainの手前にStringのSetとMapのモジュールをs,mを追加します。
@@ -101,6 +86,14 @@ type tに関数と継続の式を表すLetRecと関数適用を表すAppと関�
 and fundef = { name : string * Type.t; args : (string * Type.t) list; body : t }
 ```
 
+この際に、Printを消します:
+
+```
+  | Print of t
+```
+
+汎用的な関数呼び出しAppを使えるので、Printは要らなくなる訳です。
+
 デバッグ用にprint関数を追加します。
 
 ```
@@ -110,7 +103,6 @@ let rec print_t ppf = function
   | Int(i) -> fprintf ppf "Int(%d)@?" i
   | Add(a,b) -> fprintf ppf "Add(%a,%a)@?" print_t a print_t b
   | Sub(a,b) -> fprintf ppf "Sub(%a,%a)@?" print_t a print_t b
-  | Print(a) -> fprintf ppf "Print(%a)@?" print_t a
   | Let((s,t),a,b) -> fprintf ppf "Let((\"%s\",%a),%a,%a)" s Type.print_t t print_t a print_t b
   | Unit -> fprintf ppf "Unit@?"
   | Var(a) -> fprintf ppf "Var(\"%s\")@?" a
@@ -120,8 +112,8 @@ let rec print_t ppf = function
   | App(t,ts) -> fprintf ppf "App(%a,%a)" print_t t print_ts ts
 and print_st ppf = function
   | (s,t) -> fprintf ppf "(\"%s\",%a)" s Type.print_t t
-and print_sts ppf ls = Type.print_ls print_st ppf ls
-and print_ts ppf ls = Type.print_ls print_t ppf ls
+and print_sts ppf ls = Type.prints print_st ppf ls
+and print_ts ppf ls = Type.prints print_t ppf ls
 ```
 
 ## type.ml
@@ -133,12 +125,12 @@ type tに関数の型を追加します。多値はこの章では使いませ�
   | Tuple of t list
 ```
 
-デバッグ用のprint_ls print_tを追加します。
+デバッグ用のprints print_tを追加します。
 
 ```
 open Format
 
-let rec print_ls f ppf ls =
+let rec prints f ppf ls =
   let rec loop ppf = function
     | [] -> ()
     | [l] -> f ppf l
@@ -152,7 +144,7 @@ let rec print_t ppf = function
   | Var({contents=Some t}) -> fprintf ppf "Var(ref (Some(%a)))@?" print_t t
   | Fun(ts,t) -> fprintf ppf "Fun(%a,%a)@?" print_ts ts print_t t
   | Tuple(ts) -> fprintf ppf "Tuple(%a)@?" print_ts ts
-and print_ts ppf ts = print_ls print_t ppf ts
+and print_ts ppf ts = prints print_t ppf ts
 ```
 
 ## utils.ml
@@ -164,10 +156,16 @@ module M = Map.Make(String)
 
 ## parser.mly
 
-RECトークンを追加します。
+RECトークンを追加します:
 
 ```
 %token REC
+```
+
+PRINTトークンを消します:
+
+```
+%token PRINT
 ```
 
 simple_expにUnitの構文を追加します:
@@ -177,7 +175,15 @@ simple_expにUnitの構文を追加します:
     { Unit }
 ```
 
-expに以下を追加します:
+expからPRINTの項目を消して、
+
+```
+| PRINT simple_exp
+    %prec prec_app
+    { Print($2) }
+```
+
+以下を追加します:
 
 ```
 | LET REC fundef IN exp
@@ -212,7 +218,14 @@ actual_args:
 
 ## lexer.mll
 
-字句解析のルールのletの下にrecを追加します:
+字句解析のルールからprintを消して、
+
+```
+| "print"
+    { PRINT }
+```
+
+recをletの下に追加します:
 
 ```
 | "rec"
@@ -230,7 +243,13 @@ deref_typeに以下を追加します:
         Type.Fun(List.map deref_type t1s, deref_type t2)
 ```
 
-deref_termに以下を追加します:
+deref_termのPrintの箇所を
+
+```
+    | Print(e) -> Print(deref_term(e))
+```
+
+以下に書き換えます:
 
 ```
     | LetRec({ name = xt; args = yts; body = e1 }, e2) ->
@@ -259,7 +278,15 @@ unifyに以下を追加します:
         unify t1' t2'
 ```
 
-inferに以下を追加します:
+inferのPrintの箇所を
+
+```
+        | Print(x) ->
+          let _ = infer env x in
+          Type.Unit
+```
+
+以下に書き換えます:
 
 ```
         | LetRec({ name = (x, t); args = yts; body = e1 }, e2) ->
@@ -274,15 +301,31 @@ inferに以下を追加します:
 
 ## KNormalモジュール
 
+type tのPrintを消します:
+
+```
+    | Print of string
+```
+
 type tに以下を追加します:
 
 ```
     | LetRec of fundef * t
     | App of string * string list
+    | ExtFunApp of string * string list * Type.t
   and fundef = {
     name : string * Type.t;
     args : (string * Type.t) list;
     body : t }
+```
+
+visitからPrintを消して、
+
+```
+      | Syntax.Print(aE) ->
+        insert_let (visit env aE) (fun x ->
+          (Print x, Type.Unit)
+        )
 ```
 
 visitに以下を追加します:
@@ -293,6 +336,18 @@ visitに以下を追加します:
         let e2', t2 = visit env' e2 in
         let e1', t1 = visit (M.add_list yts env') e1 in
         LetRec({ name = (x, t); args = yts; body = e1' }, e2'), t2
+      | Syntax.App(Syntax.Var(f), e2s) when not (M.mem f env) ->
+        (* 外部関数の呼び出し (caml2html: knormal_extfunapp) *)
+          (match M.find f !Typing.extenv with
+          | Type.Fun(_, t) ->
+            let rec bind xs = function
+              (* "xs" are identifiers for the arguments *)
+              | [] -> ExtFunApp(f, xs, t), t
+              | e2 :: e2s ->
+                insert_let (visit env e2)
+                  (fun x -> bind (xs @ [x]) e2s) in
+            bind [] e2s (* left-to-right evaluation *)
+          | _ -> assert false)
       | Syntax.App(e1, e2s) ->
         (match visit env e1 with
         | _, Type.Fun(_, t) as g_e1 ->
@@ -328,7 +383,7 @@ module Closure = struct
     | Let of (string * Type.t) * t * t
     | Var of string
     | AppDir of string * string list
-    | Print of string
+    | ExtFunApp of string * string list * Type.t
   type fundef = {
     name : string * Type.t;
     args : (string * Type.t) list;
@@ -354,7 +409,7 @@ module Closure = struct
       toplevel := {name=(x, t); args=yts; body=visit e1 } :: !toplevel;
       visit e2
     | KNormal.App(x, ys) -> AppDir(x, ys)
-    | KNormal.Print(x) -> Print(x)
+    | KNormal.ExtFunApp(x, ys, t) -> ExtFunApp(x, ys, t)
 
   (**
    * クロージャ変換
@@ -370,25 +425,19 @@ end
 
 ## Virtualモジュール
 
-type rに以下を追加します:
+type rにグローバルな変数名を表すRGを追加します:
 
 ```
     | RG of Type.t * string
 ```
 
-regidに以下を追加します:
+type tのPrintを消して、
 
 ```
-    | RG (_,id) -> id
+    | Print of r
 ```
 
-regtに以下を追加します:
-
-```
-    | RG (t,_) -> t
-```
-
-type tに以下の関数呼び出し命令を追加します:
+汎用的なCallに書き換えます:
 
 ```
     | Call of r * r * r list
@@ -405,7 +454,19 @@ type tにはRetも追加し、fundefとprogも追加します:
   type prog = Prog of fundef list
 ```
 
-visitのKNormal.はClosureに変更し、
+regidに以下を追加します:
+
+```
+    | RG (_,id) -> id
+```
+
+regtに以下を追加します:
+
+```
+    | RG (t,_) -> t
+```
+
+visitのKNormal.はClosureに変更し、Printは消します:
 
 ```
   let rec visit (env)(k: KNormal.t): r =
@@ -418,7 +479,7 @@ visitのKNormal.はClosureに変更し、
       	:
       | KNormal.Print(aId) ->
       	:
-      | KNormal.Unit -> RN(Type.Unit, "void")
+      | KNormal.Unit -> RN(Type.Unit, "0")
       | KNormal.Var a ->
       	:
 ```
@@ -434,9 +495,7 @@ visitのKNormal.はClosureに変更し、
       | Closure.Sub(x, y) -> bin env Type.Int "sub" x y
       | Closure.Let((aId,aT), bK, cK) ->
       	:
-      | Closure.Print(aId) ->
-      	:
-      | Closure.Unit -> RN(Type.Unit, "void")
+      | Closure.Unit -> RN(Type.Unit, "0")
       | Closure.Var a ->
       	:
 ```
@@ -453,6 +512,12 @@ visitに関数適用の処理を追加します:
         let retR = RL(regt nameR, genid("..")) in
         add(Call(retR, nameR, prmRs));
         retR
+      | Closure.ExtFunApp(nameId, prmIds, t) ->
+        let prmRs = List.map (fun prmId -> M.find prmId env) prmIds in
+        let nameR = RG(t, nameId) in
+        let retR = RL(t, genid("..")) in
+        add(Call(retR, nameR, prmRs));
+        retR
 ```
 
 applyはvisitfunを加えfold_leftでループして処理します:
@@ -465,6 +530,7 @@ applyはvisitfunを加えfold_leftでループして処理します:
 
     match t with
     | Type.Fun(_, t) ->
+      vs := [];
       let env = M.add x (RG(t,x)) env in
       let env' = M.add_list (List.map (fun (s,t) -> (s, RL(t,s))) yts) env in
       let r = visit env' e in
@@ -477,7 +543,7 @@ applyはvisitfunを加えfold_leftでループして処理します:
       Closure.args=[]; Closure.body= e}] in
     let (_,fundefs) =
       List.fold_left
-        (fun  (env, fundefs) fundef ->
+        (fun (env, fundefs) fundef ->
           let (env, fundef) = visitfun env fundef in
           (env, fundef::fundefs)
         )
@@ -502,10 +568,10 @@ ptはrecを付けて
 ```
 
 Fun,Tupleを追加します。
-main関数のリターン値を一定にしたいのでUnitはi32にしてしまいます:
+main関数のリターン値を一定にしたいのでUnitはi64にしてしまいます:
 
 ```
-    | Type.Unit -> "i32"
+    | Type.Unit -> "i64"
     | Type.Fun(ts,t) -> pt t ^ "(" ^ String.concat ", " (List.map pt ts) ^ ")*"
     | Type.Tuple(ts) -> "{" ^ String.concat ", " (List.map pt ts) ^ "}"
 ```
@@ -514,6 +580,12 @@ prt にRGを追加します:
 
 ```
       | RG(t,_) -> pt t
+```
+
+emitからもPrintを削除し、
+```
+      | Print(a) ->
+        asm_p("call i64 @print(" ^ pr a ^ ") nounwind ssp")
 ```
 
 emitにCallとRetを追加します:
@@ -530,7 +602,7 @@ emitにCallとRetを追加します:
       | Ret(a) ->
         (match regt a with
           | Type.Unit ->
-            asm_p("ret i32 0")
+            asm_p("ret i64 0")
           | _ ->
             asm_p("ret " ^ pr(a))
         )
@@ -542,13 +614,13 @@ applyの受け取りをProgを受け取るように修正します:
   let apply(file: string) (Prog(fundefs)):unit =
 ```
 
-メイン関数だった所を
+メイン関数だった所を消して、
 
 ```
-    asm("define i32 @main() nounwind ssp {");
+    asm("define i64 @main() nounwind ssp {");
     asm("entry:");
     List.iter (fun v -> emit(v)) vs;
-    asm_p("ret i32 0");
+    asm_p("ret i64 0");
     asm("}");
 ```
 
@@ -569,7 +641,7 @@ applyの受け取りをProgを受け取るように修正します:
 
 ## メインの処理
 
-テストプログラムはこんな感じに書き換えます:
+テストを以下に書き換えます:
 
 ```
   let src = "let rec f x = x+1 in print (f 1); print (2 + 3);print ((2+3)-2); let a = 1+2 in print a" in
@@ -595,7 +667,11 @@ applyの受け取りをProgを受け取るように修正します:
   fprintf std_formatter "closure ok@.";
   let v = Virtual.apply(c) in
   fprintf std_formatter "virtual ok@.";
-  Emit.apply "a.ll" v;
-  fprintf std_formatter "emit ok@.";
+  Emit.apply output v;
+  fprintf std_formatter "emit ok@."
 ```
-と変更します。
+
+と変更して途中結果を表示するようにします。
+
+omake omake testで問題なければ完了です。
+
