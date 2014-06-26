@@ -126,12 +126,12 @@ elems:
 exp_unary:
 | exp_prim { $1 }
 | NOT exp_unary { Not($2) }
-| SUB exp {
+| SUB exp_unary {
   match $2 with
   | Float(f) -> Float(-.f) (* -1.23などは型エラーではないので別扱い *)
   | e -> Neg(e)
 }
-| SUB_DOT exp { FNeg($2) }
+| SUB_DOT exp_unary { FNeg($2) }
 
 exp_post:
 | exp_unary { $1 }

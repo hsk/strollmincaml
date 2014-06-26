@@ -1,6 +1,8 @@
 %{
-open Syntax
+open Ast
 let addtyp x = (x, Type.gentyp ())
+let addtypf x = (x, Type.gentyp (), false)
+let addtypt x = (x, Type.gentyp (), true)
 %}
 
 %token <int> INT
@@ -10,15 +12,16 @@ let addtyp x = (x, Type.gentyp ())
 %token ADD_DOT SUB_DOT MUL_DOT DIV_DOT
 %token NOT NE EQ LT GT LE GE
 %token IF THEN ELSE
-%token VALEQ
+%token VALEQ VAREQ AMP
 %token LPAREN RPAREN LBRACE RBRACE
 %token LBRACKET RBRACKET ASSIGN ARRAY_CREATE
+%token NEW MUL
 %token ADD SUB
 %token SEMICORON
 %token COMMA
 %token EOF
-%type <Syntax.t> exp
-%start exp
+%type <Ast.t> exps
+%start exps
 
 %%
 
@@ -29,7 +32,7 @@ exp_prim:
   | [a] -> a
   | a -> Tuple(a)
 }
-| LBRACE exps RBRACE { Let(addtyp(Utils.genid("..")),Unit, $2) }
+| LBRACE exps RBRACE { Let(addtypf(Utils.genid("..")),Unit, $2) }
 | IDENT { Var($1) }
 | BOOL { Bool($1) }
 | FLOAT { Float($1) }
@@ -42,7 +45,7 @@ exps:
   | LetRec(a,Unit) -> LetRec(a, $2)
   | LetTuple(a, b, Unit) -> LetTuple(a, b, $2)
   | Unit -> $2
-  | a -> Let(addtyp(Utils.genid("..")), a, $2)
+  | a -> Let(addtypf(Utils.genid("..")), a, $2)
 }
 
 elems:
@@ -58,7 +61,9 @@ exp_unary:
   | e -> Neg(e)
 }
 | SUB_DOT exp_unary { FNeg($2) }
-
+| NEW exp_unary { Array(Int 1, $2) }
+| AMP exp_unary { Ref($2) }
+| MUL exp_unary { Get($2, Int 0) }
 exp_post:
 | exp_unary { $1 }
 | IF LPAREN exp RPAREN exp ELSE exp { If($3, $5, $7) }
@@ -69,7 +74,7 @@ exp_post:
 | exp_post LPAREN RPAREN VALEQ exp {
   match $1 with
   | Var(a) ->
-    LetRec({name=addtyp a;args=[];body=$5}, Unit)
+    LetRec({name=addtypf a;args=[];body=$5}, Unit)
   | _ -> assert false
 }
 | exp_post LPAREN params RPAREN VALEQ exp {
@@ -79,7 +84,7 @@ exp_post:
       | Var(a) -> addtyp a
       | _ -> assert false
     ) $3) in
-    LetRec({name=addtyp a;args=args;body=$6}, Unit)
+    LetRec({name=addtypf a;args=args;body=$6}, Unit)
   | _ -> assert false
 }
 params:
@@ -115,7 +120,7 @@ exp_val:
 | exp_post VALEQ exp_eq {
   match $1 with
   | Var(a) ->
-    Let(addtyp a, $3, Unit)
+    Let(addtypf a, $3, Unit)
   | Tuple(ls) ->
     let ls = List.fold_right
       (fun t ls ->
@@ -123,7 +128,7 @@ exp_val:
         | Var(a) -> (addtyp a) :: ls
         | Unit -> ls
         | _ -> 
-          Format.fprintf Format.std_formatter "t=%a@." Syntax.print_t t;
+          Format.fprintf Format.std_formatter "t=%a@." print_t t;
           assert false
       )
       ls
@@ -131,11 +136,33 @@ exp_val:
     in
     LetTuple(ls, $3, Unit)
   | t -> 
-    Format.fprintf Format.std_formatter "t=%a@." Syntax.print_t t;
+    Format.fprintf Format.std_formatter "t=%a@." print_t t;
+    assert false
+}
+| exp_post VAREQ exp_eq {
+  match $1 with
+  | Var(a) ->
+    Let(addtypt a, $3, Unit)
+  | Tuple(ls) ->
+    let ls = List.fold_right
+      (fun t ls ->
+        match t with
+        | Var(a) -> (addtyp a) :: ls
+        | Unit -> ls
+        | _ -> 
+          Format.fprintf Format.std_formatter "t=%a@." print_t t;
+          assert false
+      )
+      ls
+      []
+    in
+    LetTuple(ls, $3, Unit)
+  | t -> 
+    Format.fprintf Format.std_formatter "t=%a@." print_t t;
     assert false
 }
 | exp_post LBRACKET exp RBRACKET ASSIGN exp_eq { Put($1, $3, $6) }
-
+| exp_val ASSIGN exp_eq { Put($1, Int 0, $3) }
 exp:
 | exp SEMICORON { $1 }
 | exp_val { $1 }

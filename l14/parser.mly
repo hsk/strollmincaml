@@ -13,6 +13,7 @@ let addtyp x = (x, Type.gentyp ())
 %token VALEQ
 %token LPAREN RPAREN LBRACE RBRACE
 %token LBRACKET RBRACKET ASSIGN ARRAY_CREATE
+%token NEW MUL
 %token ADD SUB
 %token SEMICORON
 %token COMMA
@@ -58,7 +59,8 @@ exp_unary:
   | e -> Neg(e)
 }
 | SUB_DOT exp_unary { FNeg($2) }
-
+| NEW exp_unary { Array(Int 1, $2) }
+| MUL exp_unary { Get($2, Int 0) }
 exp_post:
 | exp_unary { $1 }
 | IF LPAREN exp RPAREN exp ELSE exp { If($3, $5, $7) }
@@ -135,6 +137,7 @@ exp_val:
     assert false
 }
 | exp_post LBRACKET exp RBRACKET ASSIGN exp_eq { Put($1, $3, $6) }
+| MUL exp ASSIGN exp_eq { Put($2, Int 0, $4) }
 
 exp:
 | exp SEMICORON { $1 }
