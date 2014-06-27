@@ -25,6 +25,8 @@ rule token = parse
 | ';'            { SEMICORON }
 | ":="           { VALEQ }
 | "#="           { VAREQ }
+| ':'            { VAL }
+| '#'            { VAR }
 | '&'            { AMP }
 | '_'            { IDENT(Utils.genid("..")) }
 | ','            { COMMA }

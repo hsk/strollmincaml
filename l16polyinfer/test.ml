@@ -193,7 +193,7 @@ let _ =
   test("id(x):=x k:=id(11) print(id(5))", "(5\n,,0)");
   test("id(x):=x id(&11)   print(id(5))", "(5\n,,0)");
   test("id2(y):=y id(x):=id2(x) print(*(id(&11))); print(id(5))", "(11\n5\n,,0)");
-
-
+(*  test("a:int=1 print(a)","(1\n,,0)");*)
+  test("a#int=1 print(a)","(1\n,,0)");
 
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)

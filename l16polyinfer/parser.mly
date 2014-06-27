@@ -3,6 +3,33 @@ open Ast
 let addtyp x = (x, Type.gentyp ())
 let addtypf x = (x, Type.gentyp (), false)
 let addtypt x = (x, Type.gentyp (), true)
+
+let typf t = fun x -> (x, t, false)
+let typt t = fun x -> (x, t, true)
+let typ1 t = fun x -> (x, t)
+
+let letin e1 e3 (addtypf, addtyp) =
+  match e1 with
+  | Var(a) ->
+    Let(addtypf a, e3, Unit)
+  | Tuple(ls) ->
+    let ls = List.fold_right
+      (fun t ls ->
+        match t with
+        | Var(a) -> (addtyp a) :: ls
+        | Unit -> ls
+        | _ -> 
+          Format.fprintf Format.std_formatter "t=%a@." print_t t;
+          assert false
+      )
+      ls
+      []
+    in
+    LetTuple(ls, e3, Unit)
+  | t -> 
+    Format.fprintf Format.std_formatter "t=%a@." print_t t;
+    assert false
+
 %}
 
 %token <int> INT
@@ -12,7 +39,7 @@ let addtypt x = (x, Type.gentyp (), true)
 %token ADD_DOT SUB_DOT MUL_DOT DIV_DOT
 %token NOT NE EQ LT GT LE GE
 %token IF THEN ELSE
-%token VALEQ VAREQ AMP
+%token VALEQ VAREQ AMP VAL VAR
 %token LPAREN RPAREN LBRACE RBRACE
 %token LBRACKET RBRACKET ASSIGN ARRAY_CREATE
 %token NEW MUL
@@ -117,52 +144,20 @@ exp_eq:
 
 exp_val:
 | exp_eq { $1 }
-| exp_post VALEQ exp_eq {
-  match $1 with
-  | Var(a) ->
-    Let(addtypf a, $3, Unit)
-  | Tuple(ls) ->
-    let ls = List.fold_right
-      (fun t ls ->
-        match t with
-        | Var(a) -> (addtyp a) :: ls
-        | Unit -> ls
-        | _ -> 
-          Format.fprintf Format.std_formatter "t=%a@." print_t t;
-          assert false
-      )
-      ls
-      []
-    in
-    LetTuple(ls, $3, Unit)
-  | t -> 
-    Format.fprintf Format.std_formatter "t=%a@." print_t t;
-    assert false
-}
-| exp_post VAREQ exp_eq {
-  match $1 with
-  | Var(a) ->
-    Let(addtypt a, $3, Unit)
-  | Tuple(ls) ->
-    let ls = List.fold_right
-      (fun t ls ->
-        match t with
-        | Var(a) -> (addtyp a) :: ls
-        | Unit -> ls
-        | _ -> 
-          Format.fprintf Format.std_formatter "t=%a@." print_t t;
-          assert false
-      )
-      ls
-      []
-    in
-    LetTuple(ls, $3, Unit)
-  | t -> 
-    Format.fprintf Format.std_formatter "t=%a@." print_t t;
-    assert false
-}
+| exp_post VALEQ exp_eq { letin $1 $3 (addtypf, addtyp) }
+| exp_post VAREQ exp_eq { letin $1 $3 (addtypt, addtyp) }
+| exp_post VAL typ ASSIGN exp_eq { letin $1 $5 (typf $3, typ1 $3) }
+| exp_post VAR typ ASSIGN exp_eq { letin $1 $5 (typt $3, typ1 $3) }
+
 | exp_post LBRACKET exp RBRACKET ASSIGN exp_eq { Put($1, $3, $6) }
 | exp_val ASSIGN exp_eq { Put($1, Int 0, $3) }
 exp:
 | exp SEMICORON { $1 }
 | exp_val { $1 }
+
+typ: IDENT {
+  match $1 with
+  | "int" -> Type.Int
+  | "float" -> Type.Float
+  | _ -> assert false
+}

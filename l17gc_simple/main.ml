@@ -135,7 +135,6 @@ module Virtual = struct
       with
       | _ -> failwith ("Not found "^id)
       )
-
     | _ -> failwith ("error")
 
   let rec visit (e: Syntax.t): Reg.t =
@@ -319,7 +318,6 @@ module Emit = struct
     asm_close()
 
 end
-
 
 let println(a,b,c) =
   Printf.printf "(%s,%s,%s)\n" a b c
