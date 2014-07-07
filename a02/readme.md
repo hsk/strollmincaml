@@ -3,6 +3,14 @@
 とっても簡単なOCaml入門をこの章で行います。
 簡単すぎるので、より詳しく知りたい人は入門書等を買って読むと良いでしょう。
 
+インストール
+
+```
+brew install ocaml
+brew install opam
+opam install omake
+```
+opamとomakeのインストールには時間がかかるのでまったりやりましょう。
 
 ## hello01.ml
 

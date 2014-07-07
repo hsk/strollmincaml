@@ -1,5 +1,19 @@
 # 足し算と引き算
 
+## インストール
+
+osxのbrewを使ったインストールは以下のようなコマンドでインストール出来ます。
+
+```
+brew install ocaml
+brew install opam
+opam install omake
+```
+
+opamとomakeのインストールには時間がかかるのでまったりやりましょう。
+
+## はじめに
+
 このギャップをこの章では、２パスで行ってしまいます。
 １パス目で、LLVMの仮想命令列に変換し、２パス目で仮想命令列をファイルに出力します。
 
@@ -451,3 +465,50 @@ let _ =
       Print(Sub(Add(Int(2), Int(3)), Int(2))))),"(1\n5\n3\n,,0)");
   Printf.printf "test all %d ok %d ng %d\n" !count !ok (!count - !ok)
 ```
+
+ファイルが出来たら実行してみましょう。
+
+```
+$ omake 
+```
+
+で、メインファイルを作成して実行出来ます。
+
+```
+*** omake: reading OMakefiles
+*** omake: finished reading OMakefiles (0.01 sec)
+- build . <.DEFAULT>
++ ./lllc
+(,,0)
+(,,0)
+(1
+5
+3
+,,0)
+*** omake: done (0.17 sec, 0/2 scans, 3/9 rules, 6/93 digests)
+```
+
+以上のような結果が得られれば成功です。
+
+```
+$ omake test
+```
+
+でテストが出来ます。
+
+```
+*** omake: reading OMakefiles
+*** omake: finished reading OMakefiles (0.01 sec)
+- build . <test>
++ ./test
+(,,0)
+(,,0)
+(1
+5
+3
+,,0)
+test all 1 ok 1 ng 0
+*** omake: done (0.38 sec, 0/3 scans, 6/12 rules, 11/106 digests)
+```
+
+以上のような結果が得られれば成功です。
